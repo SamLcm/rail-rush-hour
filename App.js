@@ -16,6 +16,7 @@ const TRACK_Y = { 1: 55, 2: 140, 3: 225 };
 const ARRIVAL_MS = 4300;
 const DEPARTURE_MS = 3700;
 const SERVICE_INTERVAL = 8;
+const DELAY_MARGIN_SECONDS = 12;
 const MOTION_RANGE = [0, 0.16, 0.32, 0.5, 0.68, 0.84, 1];
 const BOARD_W = 460;
 const BOARD_H = 280;
@@ -78,11 +79,44 @@ const pct = (value, max) => Math.max(0, Math.min(100, Math.round((value / Math.m
 const serviceLane = (service) => service?.actualLane || service?.plannedLane || null;
 
 const formatClock = (seconds) => {
-  const base = 8 * 3600 + seconds;
+  const base = 8 * 3600 + Math.max(0, Math.round(seconds));
   const h = Math.floor(base / 3600) % 24;
   const m = Math.floor((base % 3600) / 60);
   const s = base % 60;
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+};
+
+const departureInfo = (train, now) => {
+  if (!train) return null;
+  const departureAt = train.departureAt ?? train.scheduledAt;
+  const marginEnd = departureAt + DELAY_MARGIN_SECONDS;
+  const untilDeparture = departureAt - now;
+  if (untilDeparture > 0) {
+    return {
+      state: 'early',
+      title: `VERTREK VANAF ${formatClock(departureAt)}`,
+      detail: `nog ${untilDeparture}s`,
+      marginLeft: DELAY_MARGIN_SECONDS,
+      canTimeDepart: false,
+    };
+  }
+  const marginLeft = marginEnd - now;
+  if (marginLeft >= 0) {
+    return {
+      state: 'window',
+      title: 'VERTREK TOEGESTAAN',
+      detail: `${marginLeft}s binnen marge`,
+      marginLeft,
+      canTimeDepart: true,
+    };
+  }
+  return {
+    state: 'late',
+    title: `+${Math.abs(marginLeft)}s BUITEN MARGE`,
+    detail: 'vertrek zo snel mogelijk',
+    marginLeft: 0,
+    canTimeDepart: true,
+  };
 };
 
 const nextServiceForDestination = (destinationId, timetable) => timetable
@@ -90,7 +124,6 @@ const nextServiceForDestination = (destinationId, timetable) => timetable
   .sort((a, b) => a.scheduledAt - b.scheduledAt)[0] || null;
 
 const assignedLaneForDestination = (destinationId, timetable) => serviceLane(nextServiceForDestination(destinationId, timetable));
-
 const unitWidth = (train) => train.type.code === 'EXP' ? 38 : train.type.code === 'IC' ? 34 : 28;
 const consistWidth = (train) => train.sets * unitWidth(train) + Math.max(0, train.sets - 1) * 5;
 
@@ -118,10 +151,10 @@ function Signal({ x, y, green, label }) {
   );
 }
 
-function TrainConsist({ train, detail, style }) {
+function TrainConsist({ train, detail, style, onPress, departureState }) {
   const width = unitWidth(train);
-  return (
-    <View pointerEvents="none" style={[styles.consistWrap, style]}>
+  const content = (
+    <>
       <View style={styles.consistUnits}>
         {Array.from({ length: train.sets }).map((_, index) => (
           <React.Fragment key={`${train.id}-unit-${index}`}>
@@ -136,11 +169,30 @@ function TrainConsist({ train, detail, style }) {
       </View>
       <Text numberOfLines={1} style={styles.consistId}>{train.id}</Text>
       <Text numberOfLines={1} style={styles.consistDetail}>{detail || train.destination.name}</Text>
-    </View>
+    </>
   );
+
+  if (onPress) {
+    return (
+      <Pressable
+        hitSlop={12}
+        onPress={onPress}
+        style={[
+          styles.consistWrap,
+          styles.consistTouchable,
+          departureState === 'window' && styles.consistReady,
+          departureState === 'late' && styles.consistLate,
+          style,
+        ]}
+      >
+        {content}
+      </Pressable>
+    );
+  }
+  return <View pointerEvents="none" style={[styles.consistWrap, style]}>{content}</View>;
 }
 
-function DispatcherTableau({ boardSize, onLayout, platforms, arrivalTrain, arrivalLane, arrivalProgress, departureTrain, departureLane, departureProgress }) {
+function DispatcherTableau({ boardSize, onLayout, platforms, arrivalTrain, arrivalLane, arrivalProgress, departureTrain, departureLane, departureProgress, onTrainPress, now }) {
   const scaleX = boardSize.width / BOARD_W || 1;
   const scaleY = boardSize.height / BOARD_H || 1;
   const arrivalPos = arrivalTrain ? movementPosition(arrivalProgress, ARRIVAL_POINTS[arrivalLane || 1], scaleX, scaleY, arrivalTrain) : null;
@@ -148,7 +200,7 @@ function DispatcherTableau({ boardSize, onLayout, platforms, arrivalTrain, arriv
 
   return (
     <View style={styles.tableauFrame}>
-      <View style={styles.tableauHeader}><Text style={styles.tableauTitle}>STATIONSSPOREN</Text><Text style={styles.tableauStatus}>{arrivalTrain && departureTrain ? '2 BEWEGINGEN' : arrivalTrain || departureTrain ? 'TREIN IN BEWEGING' : 'RUST'}</Text></View>
+      <View style={styles.tableauHeader}><Text style={styles.tableauTitle}>STATIONSSPOREN — TIK OP TREIN VOOR VERTREK</Text><Text style={styles.tableauStatus}>{arrivalTrain && departureTrain ? '2 BEWEGINGEN' : arrivalTrain || departureTrain ? 'TREIN IN BEWEGING' : 'BEDIENING'}</Text></View>
       <View style={styles.svgArea} onLayout={(e) => onLayout(e.nativeEvent.layout)}>
         <Svg width="100%" height="100%" viewBox={`0 0 ${BOARD_W} ${BOARD_H}`}>
           <Rect x="1" y="1" width={BOARD_W - 2} height={BOARD_H - 2} rx="10" fill="#081016" stroke="#26343f" strokeWidth="2" />
@@ -177,7 +229,18 @@ function DispatcherTableau({ boardSize, onLayout, platforms, arrivalTrain, arriv
           const train = platforms[lane];
           if (!train || (departureTrain && departureTrain.id === train.id)) return null;
           const width = consistWidth(train);
-          return <TrainConsist key={train.id} train={train} detail={`${train.destination.code} • ${pct(train.onboard, train.capacity)}%`} style={{ position: 'absolute', left: TRAIN_STOP_X * scaleX - width / 2, top: TRACK_Y[lane] * scaleY - 15 }} />;
+          const timing = departureInfo(train, now);
+          const visualState = train.status === 'ready' && timing?.canTimeDepart ? timing.state : 'early';
+          return (
+            <TrainConsist
+              key={train.id}
+              train={train}
+              detail={train.status === 'ready' ? (timing?.state === 'window' ? `VERTREK • ${timing.marginLeft}s` : timing?.state === 'late' ? 'VERTREK NU' : `OVER ${Math.max(0, train.departureAt - now)}s`) : `${train.remaining}s HALTE`}
+              departureState={visualState}
+              onPress={() => onTrainPress(lane)}
+              style={{ position: 'absolute', left: TRAIN_STOP_X * scaleX - width / 2, top: TRACK_Y[lane] * scaleY - 15 }}
+            />
+          );
         })}
         {boardSize.width > 0 && arrivalTrain && arrivalPos ? <Animated.View pointerEvents="none" style={[styles.movingConsist, { transform: [{ translateX: arrivalPos.x }, { translateY: arrivalPos.y }] }]}><TrainConsist train={arrivalTrain} detail={`→ ${arrivalTrain.destination.name}`} /></Animated.View> : null}
         {boardSize.width > 0 && departureTrain && departurePos ? <Animated.View pointerEvents="none" style={[styles.movingConsist, { transform: [{ translateX: departurePos.x }, { translateY: departurePos.y }] }]}><TrainConsist train={departureTrain} detail={`→ ${departureTrain.destination.name}`} /></Animated.View> : null}
@@ -186,14 +249,16 @@ function DispatcherTableau({ boardSize, onLayout, platforms, arrivalTrain, arriv
   );
 }
 
-function TrainComposition({ train }) {
-  return (
+function TrainComposition({ train, onPress, canDepart }) {
+  const body = (
     <View style={styles.compositionRow}>
       {Array.from({ length: train.sets }).map((_, index) => (
-        <React.Fragment key={index}>{index > 0 ? <View style={styles.compositionCoupler} /> : null}<View style={[styles.setBlock, { flexBasis: `${Math.min(32, 100 / train.sets)}%` }]}><Text style={styles.setBlockText}>{train.type.code} {index + 1}</Text></View></React.Fragment>
+        <React.Fragment key={index}>{index > 0 ? <View style={styles.compositionCoupler} /> : null}<View style={[styles.setBlock, canDepart && styles.setBlockReady, { flexBasis: `${Math.min(32, 100 / train.sets)}%` }]}><Text style={styles.setBlockText}>{train.type.code} {index + 1}</Text></View></React.Fragment>
       ))}
     </View>
   );
+  if (!onPress) return body;
+  return <Pressable hitSlop={8} onPress={onPress}>{body}</Pressable>;
 }
 
 function DestinationBoard({ passengers, timetable }) {
@@ -205,7 +270,7 @@ function DestinationBoard({ passengers, timetable }) {
         const lane = serviceLane(service);
         return (
           <View key={destination.id} style={styles.destinationRow}>
-            <View style={styles.destinationNameWrap}><Text style={styles.destinationName}>{destination.name}</Text><Text style={styles.destinationSub}>{service ? `${service.id} • ${formatClock(service.scheduledAt)}` : 'geen trein gepland'}</Text></View>
+            <View style={styles.destinationNameWrap}><Text style={styles.destinationName}>{destination.name}</Text><Text style={styles.destinationSub}>{service ? `${service.id} • vertrek ${formatClock(service.departureAt).slice(0, 5)}` : 'geen trein gepland'}</Text></View>
             <Text style={styles.destinationCount}>{passengers[destination.id] || 0}</Text>
             <View style={styles.platformBadge}><Text style={styles.platformBadgeText}>{lane ? `P${lane}` : '—'}</Text></View>
           </View>
@@ -218,10 +283,15 @@ function DestinationBoard({ passengers, timetable }) {
 function Timetable({ timetable, now }) {
   const visible = timetable.filter((s) => s.status !== 'departed').slice(0, 6);
   const statusText = (service) => {
-    if (service.status === 'scheduled') return service.scheduledAt > now ? `over ${service.scheduledAt - now}s` : 'AANMELDEN';
+    if (service.status === 'scheduled') return service.scheduledAt > now ? `in ${service.scheduledAt - now}s` : 'AANMELDEN';
     if (service.status === 'waiting') return `WACHT P${service.plannedLane}`;
     if (service.status === 'arriving') return `→ P${service.actualLane}`;
-    if (service.status === 'at_platform') return `P${service.actualLane}`;
+    if (service.status === 'at_platform') {
+      const timing = departureInfo(service, now);
+      if (timing.state === 'early') return `V over ${service.departureAt - now}s`;
+      if (timing.state === 'window') return `V ${timing.marginLeft}s marge`;
+      return `V +${now - service.departureAt}s`;
+    }
     if (service.status === 'departing') return 'VERTREKT';
     return service.status;
   };
@@ -230,8 +300,8 @@ function Timetable({ timetable, now }) {
       <View style={styles.cardTitleRow}><Text style={styles.sectionLabel}>DIENSTREGELING</Text><Text style={styles.clock}>{formatClock(now)}</Text></View>
       {visible.map((service) => (
         <View key={service.serviceId} style={styles.serviceRow}>
-          <Text style={styles.serviceTime}>{formatClock(service.scheduledAt).slice(0, 5)}</Text>
-          <View style={styles.serviceMain}><Text style={styles.serviceId}>{service.id}</Text><Text style={styles.serviceDestination}>→ {service.destination.name}</Text></View>
+          <Text style={styles.serviceTime}>{formatClock(service.departureAt).slice(0, 5)}</Text>
+          <View style={styles.serviceMain}><Text style={styles.serviceId}>{service.id}</Text><Text style={styles.serviceDestination}>→ {service.destination.name} • aank. {formatClock(service.scheduledAt).slice(0, 5)}</Text></View>
           <Text style={styles.servicePlan}>P{service.plannedLane}</Text>
           <Text style={[styles.serviceStatus, service.status === 'waiting' && styles.serviceStatusWarning]}>{statusText(service)}</Text>
         </View>
@@ -240,7 +310,7 @@ function Timetable({ timetable, now }) {
   );
 }
 
-function PlatformCard({ lane, train, demandGroups, onDepart, departureBlocked }) {
+function PlatformCard({ lane, train, demandGroups, onTrainPress, departureBlocked, now }) {
   const waitingHere = demandGroups.reduce((sum, item) => sum + item.count, 0);
   if (!train) {
     return (
@@ -255,15 +325,30 @@ function PlatformCard({ lane, train, demandGroups, onDepart, departureBlocked })
 
   const fill = pct(train.onboard, train.capacity);
   const matchingWaiting = demandGroups.find((item) => item.destination.id === train.destination.id)?.count || 0;
-  const canDepart = train.status === 'ready' && !departureBlocked;
+  const timing = departureInfo(train, now);
+  const canDepart = train.status === 'ready' && timing.canTimeDepart && !departureBlocked;
+  const timingStyle = timing.state === 'window' ? styles.departureTimingReady : timing.state === 'late' ? styles.departureTimingLate : styles.departureTimingEarly;
 
   return (
-    <View style={styles.platformCard}>
+    <View style={[styles.platformCard, canDepart && styles.platformCardReady]}>
       <View style={styles.platformTop}>
         <View><Text style={styles.platformTitle}>PERRON {lane}</Text><Text style={styles.trainName}>{train.id} → {train.destination.name}</Text></View>
-        <Text style={[styles.statusBadge, train.status === 'ready' && styles.readyBadge]}>{train.status === 'ready' ? 'GEREED' : train.status === 'departing' ? 'VERTREKT' : `${train.remaining}s`}</Text>
+        <Text style={[styles.statusBadge, train.status === 'ready' && styles.readyBadge]}>{train.status === 'ready' ? 'GEREED' : train.status === 'departing' ? 'VERTREKT' : `${train.remaining}s HALTE`}</Text>
       </View>
-      <View style={styles.platformSchematic}><View style={styles.platformEdge} /><TrainComposition train={train} /><Text style={styles.platformLengthLabel}>{train.length} m • {train.sets} stellen</Text></View>
+
+      <Pressable hitSlop={8} onPress={() => onTrainPress(lane)} style={styles.platformTrainTap}>
+        <View style={styles.platformSchematic}>
+          <View style={styles.platformEdge} />
+          <TrainComposition train={train} canDepart={canDepart} />
+          <Text style={styles.platformLengthLabel}>{train.length} m • {train.sets} stellen • tik op trein</Text>
+        </View>
+      </Pressable>
+
+      <View style={[styles.departureTiming, timingStyle]}>
+        <View><Text style={styles.departureTimingLabel}>GEPLAND VERTREK</Text><Text style={styles.departureTimingClock}>{formatClock(train.departureAt)}</Text></View>
+        <View style={styles.departureTimingRight}><Text style={styles.departureTimingTitle}>{departureBlocked ? 'RIJWEG BEZET' : timing.title}</Text><Text style={styles.departureTimingDetail}>{departureBlocked ? 'wacht tot rijweg vrij is' : timing.detail}</Text></View>
+      </View>
+
       <View style={styles.exchangeRow}>
         <View style={styles.exchangeCell}><Text style={styles.exchangeLabel}>UITGESTAPT</Text><Text style={styles.exchangeValue}>{train.lastAlight || 0}</Text></View>
         <View style={styles.exchangeCell}><Text style={styles.exchangeLabel}>OVERSTAP</Text><Text style={styles.exchangeValue}>{train.lastTransfer || 0}</Text></View>
@@ -271,8 +356,7 @@ function PlatformCard({ lane, train, demandGroups, onDepart, departureBlocked })
       </View>
       <View style={styles.boardingRow}><Text style={styles.boardingLabel}>WACHT VOOR {train.destination.name.toUpperCase()}</Text><Text style={styles.boardingValue}>{matchingWaiting} • trein {fill}% vol</Text></View>
       <View style={styles.demandList}>{demandGroups.map((item) => <Text key={item.destination.id} style={[styles.demandText, item.destination.id === train.destination.id && styles.demandTextActive]}>{item.destination.name} {item.count}</Text>)}</View>
-      <Pressable disabled={!canDepart} style={[styles.departButton, !canDepart && styles.buttonDisabled]} onPress={() => onDepart(lane)}><Text style={styles.departButtonText}>{departureBlocked ? 'WACHT OP RIJWEG' : train.status !== 'ready' ? 'REIZIGERSWISSEL' : `VERTREK NAAR ${train.destination.name.toUpperCase()}`}</Text></Pressable>
-      {train.status === 'ready' && matchingWaiting > 0 ? <Text style={styles.holdHint}>Je kunt nog reizigers meenemen, maar iedere seconde wachten telt als vertraging.</Text> : null}
+      <Text style={[styles.tapHint, canDepart && styles.tapHintReady]}>{canDepart ? 'TIK OP DE TREIN OM TE VERTREKKEN' : train.status !== 'ready' ? 'Nog bezig met reizigerswissel' : timing.state === 'early' ? `Vertrek toegestaan over ${train.departureAt - now}s` : departureBlocked ? 'Wacht op vrije uitrijweg' : 'Tik op de trein'}</Text>
     </View>
   );
 }
@@ -324,6 +408,7 @@ export default function App() {
     const sets = type.minSets + (index % (type.maxSets - type.minSets + 1));
     const capacity = type.setCapacity * sets;
     const onboard = Math.round(capacity * (0.45 + ((index * 13) % 35) / 100));
+    const departureAt = scheduledAt + Math.ceil(ARRIVAL_MS / 1000) + type.dwell;
     return {
       serviceId: `svc-${index}-${scheduledAt}`,
       id: `${type.code} ${sequence.current}`,
@@ -332,6 +417,7 @@ export default function App() {
       plannedLane,
       actualLane: null,
       scheduledAt,
+      departureAt,
       sets,
       length: type.setLength * sets,
       capacity,
@@ -374,16 +460,15 @@ export default function App() {
     arrivalProgress.setValue(0);
     if (diverted) {
       setPlatformChanges((value) => value + 1);
-      setMessage(`Perronwijziging: ${train.id} naar ${train.destination.name} wijkt uit van P${train.plannedLane} naar P${lane}. Reizigers lopen om.`);
+      setMessage(`Perronwijziging: ${train.id} wijkt uit van P${train.plannedLane} naar P${lane}. Reizigers lopen om.`);
     } else {
-      setMessage(`${train.id} naar ${train.destination.name} rijdt automatisch binnen op gepland P${lane}.`);
+      setMessage(`${train.id} naar ${train.destination.name} rijdt automatisch binnen op P${lane}.`);
     }
 
     Animated.timing(arrivalProgress, { toValue: 1, duration: ARRIVAL_MS, useNativeDriver: true }).start(({ finished }) => {
       arrivalBusyRef.current = false;
       arrivalLaneRef.current = null;
       if (!finished) return;
-
       const alight = Math.min(movingTrain.onboard, Math.round(movingTrain.onboard * (0.24 + Math.random() * 0.20)));
       const transfer = Math.round(alight * (0.28 + Math.random() * 0.30));
       const remainingOnboard = Math.max(0, movingTrain.onboard - alight);
@@ -402,7 +487,7 @@ export default function App() {
       updateService(movingTrain.serviceId, { status: 'at_platform', actualLane: lane });
       setArrivalTrain(null);
       setArrivalLane(null);
-      setMessage(`${movingTrain.id} op P${lane}: ${alight} uitgestapt, ${transfer} daarvan stappen over. Bestemming: ${movingTrain.destination.name}.`);
+      setMessage(`${movingTrain.id} op P${lane}: ${alight} uitgestapt, ${transfer} stappen over. Vertrek gepland ${formatClock(movingTrain.departureAt)}.`);
       setTimeout(() => tryAutoArrival(), 80);
     });
     return true;
@@ -412,31 +497,43 @@ export default function App() {
     if (arrivalBusyRef.current || outsideRef.current.length === 0) return;
     const train = outsideRef.current[0];
     const lane = train.plannedLane;
-    if (platformsRef.current[lane]) return;
-    if (arrivalConflict(lane)) return;
+    if (platformsRef.current[lane] || arrivalConflict(lane)) return;
     startArrival(train, lane, false);
   };
 
   const divertOutside = (lane) => {
     const train = outsideRef.current[0];
     if (!train || lane === train.plannedLane || platformsRef.current[lane]) return;
-    if (arrivalConflict(lane)) { setMessage(`P${lane} is vrij, maar de rijweg is nu in conflict met een vertrekkende trein.`); return; }
+    if (arrivalConflict(lane)) { setMessage(`P${lane} is vrij, maar de rijweg is bezet.`); return; }
     startArrival(train, lane, true);
   };
 
   const depart = (lane) => {
     const train = platformsRef.current[lane];
-    if (!train || train.status !== 'ready' || departureBusyRef.current) return;
-    if (departureConflict(lane)) { setMessage(`${train.id} kan nog niet vertrekken: uitrijweg conflicteert met de aankomende trein.`); return; }
+    if (!train || departureBusyRef.current) return;
+    if (train.status !== 'ready') {
+      setMessage(`${train.id} kan nog niet vertrekken: reizigerswissel nog ${train.remaining || 0}s.`);
+      return;
+    }
+    const timing = departureInfo(train, timeRef.current);
+    if (!timing.canTimeDepart) {
+      setMessage(`${train.id} mag nog niet vertrekken. Gepland vertrek ${formatClock(train.departureAt)} — nog ${train.departureAt - timeRef.current}s.`);
+      return;
+    }
+    if (departureConflict(lane)) {
+      setMessage(`${train.id} mag qua tijd vertrekken, maar de uitrijweg is nog bezet.`);
+      return;
+    }
 
     departureBusyRef.current = true;
     departureLaneRef.current = lane;
+    const departureDelay = Math.max(0, timeRef.current - train.departureAt);
     syncPlatforms({ ...platformsRef.current, [lane]: { ...train, status: 'departing' } });
-    updateService(train.serviceId, { status: 'departing' });
+    updateService(train.serviceId, { status: 'departing', actualDepartureAt: timeRef.current, departureDelay });
     setDepartureTrain(train);
     setDepartureLane(lane);
     departureProgress.setValue(0);
-    setMessage(`${train.id} vertrekt van P${lane} naar ${train.destination.name} met ${train.onboard} reizigers.`);
+    setMessage(`${train.id} vertrekt naar ${train.destination.name}. ${departureDelay <= DELAY_MARGIN_SECONDS ? `Binnen marge (${Math.max(0, DELAY_MARGIN_SECONDS - departureDelay)}s over).` : `+${departureDelay - DELAY_MARGIN_SECONDS}s buiten marge.`}`);
 
     Animated.timing(departureProgress, { toValue: 1, duration: DEPARTURE_MS, useNativeDriver: true }).start(({ finished }) => {
       departureBusyRef.current = false;
@@ -510,9 +607,10 @@ export default function App() {
         if (train.status === 'dwelling') {
           train.remaining = Math.max(0, train.remaining - 1);
           if (train.remaining === 0) train.status = 'ready';
-        } else if (train.status === 'ready') {
+        }
+        if (train.status === 'ready') {
           train.readyWait = (train.readyWait || 0) + 1;
-          addedDelay += 1;
+          if (now > train.departureAt + DELAY_MARGIN_SECONDS) addedDelay += 1;
         }
         nextPlatforms[lane] = train;
       });
@@ -533,7 +631,6 @@ export default function App() {
     departureBusyRef.current = false;
     arrivalLaneRef.current = null;
     departureLaneRef.current = null;
-
     const initialTable = [];
     for (let i = 0; i < 12; i += 1) {
       initialTable.push(createService(nextServiceAt.current));
@@ -547,7 +644,7 @@ export default function App() {
     setServiceTime(0);
     setArrivalTrain(null); setArrivalLane(null); setDepartureTrain(null); setDepartureLane(null);
     setHandled(0); setDepartedPassengers(0); setDelay(0); setPlatformChanges(0);
-    setMessage('Dienst gestart. Reizigers lopen naar het geplande perron van hun volgende trein.');
+    setMessage(`Dienst gestart. Treinen mogen vanaf hun geplande vertrektijd vertrekken; marge ${DELAY_MARGIN_SECONDS}s.`);
     setPhase('playing');
   };
 
@@ -556,9 +653,9 @@ export default function App() {
       <SafeAreaView style={styles.screen}>
         <StatusBar barStyle="light-content" />
         <View style={styles.menuWrap}>
-          <Text style={styles.kicker}>DESTINATION FLOW / V0.7</Text>
+          <Text style={styles.kicker}>DEPARTURE CONTROL / V0.7.1</Text>
           <Text style={styles.title}>RAIL{`\n`}RUSH HOUR</Text>
-          <Text style={styles.subtitle}>Treinen volgen automatisch hun dienstregeling en geplande spoor. Jij beslist wanneer ze vertrekken — en grijpt in als een gepland perron bezet is.</Text>
+          <Text style={styles.subtitle}>Treinen rijden automatisch binnen. Jij bewaakt de vertrektijd: tik op een trein zodra hij groen is en vertrek binnen de vertragingmarge.</Text>
           <Pressable style={styles.primaryButton} onPress={startGame}><Text style={styles.primaryButtonText}>START DIENST</Text></Pressable>
         </View>
       </SafeAreaView>
@@ -576,7 +673,7 @@ export default function App() {
         <View style={styles.hudCell}><Text style={styles.hudLabel}>KLOK</Text><Text style={styles.hudValue}>{formatClock(serviceTime).slice(0, 5)}</Text></View>
         <View style={[styles.hudCell, styles.hudCenter]}><Text style={styles.hudLabel}>WACHTEND</Text><Text style={styles.hudValue}>{totalWaiting}</Text></View>
         <View style={[styles.hudCell, styles.hudCenter]}><Text style={styles.hudLabel}>VERTROKKEN</Text><Text style={styles.hudValue}>{handled}</Text></View>
-        <View style={[styles.hudCell, styles.hudRight]}><Text style={styles.hudLabel}>VERTRAGING</Text><Text style={styles.hudValue}>{delay}s</Text></View>
+        <View style={[styles.hudCell, styles.hudRight]}><Text style={styles.hudLabel}>BUITEN MARGE</Text><Text style={styles.hudValue}>{delay}s</Text></View>
       </View>
 
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
@@ -586,25 +683,47 @@ export default function App() {
         {blockedTrain ? (
           <View style={styles.blockedCard}>
             <View style={styles.blockedTop}><View><Text style={styles.blockedLabel}>TREIN WACHT VOOR STATION</Text><Text style={styles.blockedTrain}>{blockedTrain.id} → {blockedTrain.destination.name}</Text></View><Text style={styles.blockedTime}>+{blockedTrain.wait}s</Text></View>
-            <Text style={styles.blockedReason}>Gepland P{blockedTrain.plannedLane} is bezet. Je kunt wachten tot het spoor vrijkomt of uitwijken.</Text>
+            <Text style={styles.blockedReason}>Gepland P{blockedTrain.plannedLane} is bezet. Wacht tot het spoor vrijkomt of wijk uit.</Text>
             <View style={styles.divertRow}>{LANES.filter((lane) => lane !== blockedTrain.plannedLane).map((lane) => {
               const occupied = Boolean(platforms[lane]);
               const conflict = arrivalConflict(lane);
-              return <Pressable key={lane} disabled={occupied} style={[styles.divertButton, (occupied || conflict) && styles.buttonDisabled]} onPress={() => divertOutside(lane)}><Text style={styles.divertSmall}>{occupied ? 'BEZET' : conflict ? 'RIJWEG BEZET' : 'WIJK UIT'}</Text><Text style={styles.divertBig}>P{lane}</Text></Pressable>;
+              return <Pressable key={lane} disabled={occupied || conflict} style={[styles.divertButton, (occupied || conflict) && styles.buttonDisabled]} onPress={() => divertOutside(lane)}><Text style={styles.divertSmall}>{occupied ? 'BEZET' : conflict ? 'RIJWEG BEZET' : 'WIJK UIT'}</Text><Text style={styles.divertBig}>P{lane}</Text></Pressable>;
             })}</View>
           </View>
         ) : null}
 
-        <DispatcherTableau boardSize={boardSize} onLayout={({ width, height }) => setBoardSize({ width, height })} platforms={platforms} arrivalTrain={arrivalTrain} arrivalLane={arrivalLane} arrivalProgress={arrivalProgress} departureTrain={departureTrain} departureLane={departureLane} departureProgress={departureProgress} />
+        <DispatcherTableau
+          boardSize={boardSize}
+          onLayout={({ width, height }) => setBoardSize({ width, height })}
+          platforms={platforms}
+          arrivalTrain={arrivalTrain}
+          arrivalLane={arrivalLane}
+          arrivalProgress={arrivalProgress}
+          departureTrain={departureTrain}
+          departureLane={departureLane}
+          departureProgress={departureProgress}
+          onTrainPress={depart}
+          now={serviceTime}
+        />
         <View style={styles.messageStrip}><View style={styles.messageLamp} /><Text style={styles.messageText}>{message}</Text></View>
 
-        <Text style={styles.stationHeading}>PERRONS — JIJ BEPAALT HET VERTREK</Text>
-        {LANES.map((lane) => <PlatformCard key={lane} lane={lane} train={platforms[lane]} demandGroups={demandForLane(lane)} onDepart={depart} departureBlocked={Boolean(platforms[lane]?.status === 'ready' && departureConflict(lane))} />)}
+        <Text style={styles.stationHeading}>PERRONS — TIK OP DE TREIN OM TE VERTREKKEN</Text>
+        {LANES.map((lane) => (
+          <PlatformCard
+            key={lane}
+            lane={lane}
+            train={platforms[lane]}
+            demandGroups={demandForLane(lane)}
+            onTrainPress={depart}
+            departureBlocked={Boolean(platforms[lane]?.status === 'ready' && departureConflict(lane))}
+            now={serviceTime}
+          />
+        ))}
 
-        <View style={styles.summaryCard}><Text style={styles.summaryTitle}>DIENSTRESULTAAT</Text><Text style={styles.summaryText}>{departedPassengers} reizigers vertrokken • {platformChanges} perronwijzigingen • {delay}s vertraging</Text></View>
+        <View style={styles.summaryCard}><Text style={styles.summaryTitle}>DIENSTRESULTAAT</Text><Text style={styles.summaryText}>{departedPassengers} reizigers vertrokken • {platformChanges} perronwijzigingen • {delay}s buiten vertragingmarge</Text></View>
       </ScrollView>
 
-      <View style={styles.footer}><Text style={styles.footerText}>V0.7 • BESTEMMINGEN • AUTOMATISCHE AANKOMST • OVERSTAPPERS • HANDMATIG VERTREK</Text></View>
+      <View style={styles.footer}><Text style={styles.footerText}>V0.7.1 • TIK TREIN = VERTREK • GEPLANDE VERTREKTIJD • {DELAY_MARGIN_SECONDS}s MARGE</Text></View>
     </SafeAreaView>
   );
 }
@@ -620,8 +739,8 @@ const styles = StyleSheet.create({
 
   timetableCard: { marginTop: 9, backgroundColor: '#0d161d', borderWidth: 1, borderColor: '#2b3b45', borderRadius: 10, padding: 10 }, cardTitleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   sectionLabel: { color: '#718591', fontSize: 7.2, fontWeight: '900', letterSpacing: 1.1 }, queueCount: { color: '#78909e', fontSize: 8, fontWeight: '900' }, clock: { color: '#ffd65a', fontSize: 14, fontWeight: '900' },
-  serviceRow: { minHeight: 36, flexDirection: 'row', alignItems: 'center', borderTopWidth: 1, borderTopColor: '#182630' }, serviceTime: { width: 42, color: '#70838e', fontSize: 9, fontWeight: '900' },
-  serviceMain: { flex: 1 }, serviceId: { color: '#e2ebef', fontSize: 10, fontWeight: '900' }, serviceDestination: { color: '#7c919c', fontSize: 7.5, fontWeight: '800' }, servicePlan: { width: 28, color: '#58b9ff', fontSize: 9, fontWeight: '900', textAlign: 'center' }, serviceStatus: { width: 62, color: '#68d995', fontSize: 7.2, fontWeight: '900', textAlign: 'right' }, serviceStatusWarning: { color: '#ffbe5c' },
+  serviceRow: { minHeight: 39, flexDirection: 'row', alignItems: 'center', borderTopWidth: 1, borderTopColor: '#182630' }, serviceTime: { width: 42, color: '#70d29a', fontSize: 9, fontWeight: '900' },
+  serviceMain: { flex: 1 }, serviceId: { color: '#e2ebef', fontSize: 10, fontWeight: '900' }, serviceDestination: { color: '#7c919c', fontSize: 7.1, fontWeight: '800' }, servicePlan: { width: 28, color: '#58b9ff', fontSize: 9, fontWeight: '900', textAlign: 'center' }, serviceStatus: { width: 78, color: '#68d995', fontSize: 6.8, fontWeight: '900', textAlign: 'right' }, serviceStatusWarning: { color: '#ffbe5c' },
 
   destinationBoard: { marginTop: 8, backgroundColor: '#0d161d', borderWidth: 1, borderColor: '#2b3b45', borderRadius: 10, padding: 10 }, destinationRow: { minHeight: 43, flexDirection: 'row', alignItems: 'center', borderTopWidth: 1, borderTopColor: '#182630' },
   destinationNameWrap: { flex: 1 }, destinationName: { color: '#e4edf1', fontSize: 11, fontWeight: '900' }, destinationSub: { color: '#687d88', fontSize: 7.3, fontWeight: '700', marginTop: 2 }, destinationCount: { color: '#f0f5f7', fontSize: 17, fontWeight: '900', marginRight: 10 },
@@ -631,15 +750,19 @@ const styles = StyleSheet.create({
   divertRow: { flexDirection: 'row', gap: 7, marginTop: 8 }, divertButton: { flex: 1, minHeight: 48, borderRadius: 7, borderWidth: 1, borderColor: '#d1953d', backgroundColor: '#33230f', alignItems: 'center', justifyContent: 'center' }, divertSmall: { color: '#c3a36b', fontSize: 6.5, fontWeight: '900' }, divertBig: { color: '#ffda91', fontSize: 17, fontWeight: '900' },
 
   tableauFrame: { marginTop: 8, backgroundColor: '#0a1218', borderWidth: 1, borderColor: '#263741', borderRadius: 11, overflow: 'hidden' }, tableauHeader: { minHeight: 35, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 10, borderBottomWidth: 1, borderBottomColor: '#263741' }, tableauTitle: { color: '#9eb0bb', fontSize: 7.2, fontWeight: '900', letterSpacing: 0.7 }, tableauStatus: { color: '#ffd65a', fontSize: 7, fontWeight: '900' }, svgArea: { height: 220, position: 'relative', overflow: 'hidden' },
-  consistWrap: { alignItems: 'center', justifyContent: 'center' }, consistUnits: { flexDirection: 'row', alignItems: 'center', height: 19 }, consistUnit: { height: 17, backgroundColor: '#d9edf8', borderWidth: 1.5, borderColor: '#081016', borderRadius: 3, overflow: 'hidden', justifyContent: 'center' }, cabBand: { position: 'absolute', left: 0, top: 0, bottom: 0, width: 4, backgroundColor: '#6ba5c3' }, windowsRow: { position: 'absolute', left: 7, right: 3, top: 3, flexDirection: 'row', justifyContent: 'space-around' }, windowDot: { width: 4, height: 3, borderRadius: 1, backgroundColor: '#31566c' }, consistCode: { color: '#173443', fontSize: 5.5, fontWeight: '900', textAlign: 'center', marginTop: 5 }, coupler: { width: 5, height: 3, backgroundColor: '#6f7c84' }, consistId: { color: '#d8e8ef', fontSize: 6.3, lineHeight: 8, fontWeight: '900', backgroundColor: '#101920', paddingHorizontal: 3, borderRadius: 2, marginTop: 1 }, consistDetail: { color: '#7a9daf', fontSize: 5.4, lineHeight: 7, fontWeight: '900', backgroundColor: '#101920', paddingHorizontal: 2, borderRadius: 2 }, movingConsist: { position: 'absolute', left: 0, top: 0 },
+  consistWrap: { alignItems: 'center', justifyContent: 'center' }, consistTouchable: { paddingHorizontal: 3, paddingVertical: 2, borderRadius: 6, borderWidth: 1, borderColor: '#43545e', backgroundColor: 'rgba(7,13,18,0.72)' }, consistReady: { borderColor: '#43df82', backgroundColor: 'rgba(20,65,42,0.82)' }, consistLate: { borderColor: '#ff6677', backgroundColor: 'rgba(72,25,31,0.85)' },
+  consistUnits: { flexDirection: 'row', alignItems: 'center', height: 19 }, consistUnit: { height: 17, backgroundColor: '#d9edf8', borderWidth: 1.5, borderColor: '#081016', borderRadius: 3, overflow: 'hidden', justifyContent: 'center' }, cabBand: { position: 'absolute', left: 0, top: 0, bottom: 0, width: 4, backgroundColor: '#6ba5c3' }, windowsRow: { position: 'absolute', left: 7, right: 3, top: 3, flexDirection: 'row', justifyContent: 'space-around' }, windowDot: { width: 4, height: 3, borderRadius: 1, backgroundColor: '#31566c' }, consistCode: { color: '#173443', fontSize: 5.5, fontWeight: '900', textAlign: 'center', marginTop: 5 }, coupler: { width: 5, height: 3, backgroundColor: '#6f7c84' }, consistId: { color: '#d8e8ef', fontSize: 6.3, lineHeight: 8, fontWeight: '900', backgroundColor: '#101920', paddingHorizontal: 3, borderRadius: 2, marginTop: 1 }, consistDetail: { color: '#9fc1d2', fontSize: 5.4, lineHeight: 7, fontWeight: '900', backgroundColor: '#101920', paddingHorizontal: 2, borderRadius: 2 }, movingConsist: { position: 'absolute', left: 0, top: 0 },
 
   messageStrip: { minHeight: 40, flexDirection: 'row', alignItems: 'center', marginTop: 8, paddingHorizontal: 10, paddingVertical: 5, backgroundColor: '#0a1218', borderWidth: 1, borderColor: '#20303a', borderRadius: 8 }, messageLamp: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#58b9ff', marginRight: 8 }, messageText: { flex: 1, color: '#a3b1ba', fontSize: 9, lineHeight: 12, fontWeight: '700' },
 
-  stationHeading: { color: '#78909c', fontSize: 7.5, fontWeight: '900', letterSpacing: 1.2, textAlign: 'center', marginTop: 14, marginBottom: 7 }, platformCard: { marginBottom: 8, backgroundColor: '#0d161d', borderWidth: 1, borderColor: '#263842', borderRadius: 10, padding: 10 }, platformTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }, platformTitle: { color: '#7d919c', fontSize: 7, fontWeight: '900', letterSpacing: 1 }, trainName: { color: '#e4edf1', fontSize: 14, fontWeight: '900', marginTop: 2 }, statusBadge: { color: '#ffd65a', fontSize: 8, fontWeight: '900', backgroundColor: '#27210e', paddingHorizontal: 7, paddingVertical: 4, borderRadius: 5 }, readyBadge: { color: '#54e78d', backgroundColor: '#10251a' }, freeBadge: { color: '#54e78d', fontSize: 8, fontWeight: '900', backgroundColor: '#10251a', paddingHorizontal: 7, paddingVertical: 4, borderRadius: 5 },
-  platformSchematic: { marginTop: 8, paddingTop: 7, paddingBottom: 5, minHeight: 38, justifyContent: 'center' }, platformEdge: { position: 'absolute', left: 0, right: 0, top: 1, height: 6, borderRadius: 2, backgroundColor: '#26343d', borderTopWidth: 1, borderTopColor: '#64737c' }, platformLengthLabel: { color: '#596d78', fontSize: 6.5, fontWeight: '800', marginTop: 4 }, compositionRow: { flexDirection: 'row', alignItems: 'center', marginTop: 7 }, compositionCoupler: { width: 5, height: 3, backgroundColor: '#71808a' }, setBlock: { maxWidth: 105, minWidth: 45, height: 14, backgroundColor: '#40677d', borderRadius: 3, alignItems: 'center', justifyContent: 'center' }, setBlockText: { color: '#d8edf7', fontSize: 6, fontWeight: '900' },
+  stationHeading: { color: '#78909c', fontSize: 7.5, fontWeight: '900', letterSpacing: 1.2, textAlign: 'center', marginTop: 14, marginBottom: 7 }, platformCard: { marginBottom: 8, backgroundColor: '#0d161d', borderWidth: 1, borderColor: '#263842', borderRadius: 10, padding: 10 }, platformCardReady: { borderColor: '#3ccf78' }, platformTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }, platformTitle: { color: '#7d919c', fontSize: 7, fontWeight: '900', letterSpacing: 1 }, trainName: { color: '#e4edf1', fontSize: 14, fontWeight: '900', marginTop: 2 }, statusBadge: { color: '#ffd65a', fontSize: 8, fontWeight: '900', backgroundColor: '#27210e', paddingHorizontal: 7, paddingVertical: 4, borderRadius: 5 }, readyBadge: { color: '#54e78d', backgroundColor: '#10251a' }, freeBadge: { color: '#54e78d', fontSize: 8, fontWeight: '900', backgroundColor: '#10251a', paddingHorizontal: 7, paddingVertical: 4, borderRadius: 5 },
+  platformTrainTap: { borderRadius: 7 }, platformSchematic: { marginTop: 8, paddingTop: 7, paddingBottom: 5, minHeight: 38, justifyContent: 'center' }, platformEdge: { position: 'absolute', left: 0, right: 0, top: 1, height: 6, borderRadius: 2, backgroundColor: '#26343d', borderTopWidth: 1, borderTopColor: '#64737c' }, platformLengthLabel: { color: '#596d78', fontSize: 6.5, fontWeight: '800', marginTop: 4 }, compositionRow: { flexDirection: 'row', alignItems: 'center', marginTop: 7 }, compositionCoupler: { width: 5, height: 3, backgroundColor: '#71808a' }, setBlock: { maxWidth: 105, minWidth: 45, height: 14, backgroundColor: '#40677d', borderRadius: 3, alignItems: 'center', justifyContent: 'center' }, setBlockReady: { backgroundColor: '#2b8c58' }, setBlockText: { color: '#d8edf7', fontSize: 6, fontWeight: '900' },
+
+  departureTiming: { marginTop: 8, minHeight: 51, paddingHorizontal: 9, paddingVertical: 7, borderRadius: 7, borderWidth: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }, departureTimingEarly: { backgroundColor: '#221f12', borderColor: '#756831' }, departureTimingReady: { backgroundColor: '#10271a', borderColor: '#3dcf77' }, departureTimingLate: { backgroundColor: '#2b1519', borderColor: '#d45161' }, departureTimingLabel: { color: '#70808a', fontSize: 5.8, fontWeight: '900', letterSpacing: 0.5 }, departureTimingClock: { color: '#eef5f7', fontSize: 15, fontWeight: '900', marginTop: 1 }, departureTimingRight: { alignItems: 'flex-end', flex: 1, marginLeft: 10 }, departureTimingTitle: { color: '#e5edf1', fontSize: 8.7, fontWeight: '900', textAlign: 'right' }, departureTimingDetail: { color: '#8da0aa', fontSize: 7.2, fontWeight: '800', marginTop: 2, textAlign: 'right' },
+
   waitingBig: { color: '#e6eef2', fontSize: 28, fontWeight: '900', marginTop: 9 }, waitingLabel: { color: '#758893', fontSize: 8, fontWeight: '800', marginBottom: 6 }, demandList: { flexDirection: 'row', flexWrap: 'wrap', gap: 5, marginTop: 6 }, demandText: { color: '#92a4ae', fontSize: 7.4, fontWeight: '800', backgroundColor: '#121e25', paddingHorizontal: 6, paddingVertical: 3, borderRadius: 4 }, demandTextActive: { color: '#7bd1ff', backgroundColor: '#102536' }, demandTextMuted: { color: '#566873', fontSize: 7.5, fontWeight: '700' },
   exchangeRow: { flexDirection: 'row', gap: 6, marginTop: 7 }, exchangeCell: { flex: 1, backgroundColor: '#091117', borderRadius: 6, paddingVertical: 6, alignItems: 'center' }, exchangeLabel: { color: '#5f7480', fontSize: 5.8, fontWeight: '900', letterSpacing: 0.5 }, exchangeValue: { color: '#dce7ec', fontSize: 11, fontWeight: '900', marginTop: 2 }, boardingRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 9 }, boardingLabel: { color: '#647985', fontSize: 6.5, fontWeight: '900' }, boardingValue: { color: '#d5e0e5', fontSize: 8, fontWeight: '900' },
-  departButton: { minHeight: 45, marginTop: 11, alignItems: 'center', justifyContent: 'center', backgroundColor: '#102b21', borderWidth: 1.5, borderColor: '#3fd47b', borderRadius: 7 }, departButtonText: { color: '#66ec9b', fontSize: 9.5, fontWeight: '900', letterSpacing: 0.5 }, buttonDisabled: { opacity: 0.30 }, holdHint: { color: '#b49c53', fontSize: 7.5, lineHeight: 11, textAlign: 'center', marginTop: 6, fontWeight: '700' },
+  tapHint: { color: '#7b8d97', fontSize: 7.3, lineHeight: 11, textAlign: 'center', marginTop: 9, fontWeight: '900', letterSpacing: 0.4 }, tapHintReady: { color: '#58e691' }, buttonDisabled: { opacity: 0.30 },
 
   summaryCard: { backgroundColor: '#0b141a', borderWidth: 1, borderColor: '#22333d', borderRadius: 8, padding: 10, marginTop: 3 }, summaryTitle: { color: '#667b87', fontSize: 6.5, fontWeight: '900', letterSpacing: 1 }, summaryText: { color: '#9aaab3', fontSize: 8.5, fontWeight: '800', marginTop: 4 },
   footer: { alignItems: 'center', paddingVertical: 7, paddingHorizontal: 8, borderTopWidth: 1, borderTopColor: '#14212a' }, footerText: { color: '#42535e', fontSize: 6.2, fontWeight: '900', textAlign: 'center' },
