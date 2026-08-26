@@ -17,6 +17,11 @@ const SPAWN_MS = 7800;
 const ARRIVAL_MS = 4300;
 const DEPARTURE_MS = 3700;
 const MOTION_RANGE = [0, 0.16, 0.32, 0.5, 0.68, 0.84, 1];
+const BOARD_W = 460;
+const BOARD_H = 280;
+const PLATFORM_START = 264;
+const PLATFORM_END = 430;
+const TRAIN_STOP_X = 350;
 
 const TRAIN_TYPES = [
   { code: 'SPR', name: 'Sprinter S', setLength: 55, setCapacity: 220, minSets: 1, maxSets: 3, dwell: 9, boardRate: 34 },
@@ -29,7 +34,9 @@ const SEGMENTS = {
   EW_U: 'M 135 110 H 175', EW_L: 'M 135 170 H 175', EW_X1: 'M 135 110 L 175 170', EW_X2: 'M 135 170 L 175 110',
   U1: 'M 175 110 H 195', L1: 'M 175 170 H 195',
   K_U: 'M 195 110 H 235', K_L: 'M 195 170 H 235', K_X1: 'M 195 110 L 235 170', K_X2: 'M 195 170 L 235 110',
-  P1: 'M 235 110 L 260 55 H 335', P2U: 'M 235 110 L 260 140', P2L: 'M 235 170 L 260 140', P2: 'M 260 140 H 335', P3: 'M 235 170 L 260 225 H 335',
+  P1: `M 235 110 L 260 55 H ${PLATFORM_END}`,
+  P2U: 'M 235 110 L 260 140', P2L: 'M 235 170 L 260 140', P2: `M 260 140 H ${PLATFORM_END}`,
+  P3: `M 235 170 L 260 225 H ${PLATFORM_END}`,
   L0: 'M 110 170 H 135', WOUT: 'M 85 185 L 110 170', OUT: 'M 15 185 H 85',
 };
 
@@ -46,24 +53,33 @@ const DEPARTURE_ROUTES = {
 };
 
 const ARRIVAL_POINTS = {
-  1: [[15, 95], [85, 95], [110, 110], [175, 110], [235, 110], [260, 55], [305, 55]],
-  2: [[15, 95], [85, 95], [110, 110], [175, 110], [235, 110], [260, 140], [305, 140]],
-  3: [[15, 95], [85, 95], [110, 110], [175, 170], [235, 170], [260, 225], [305, 225]],
+  1: [[15, 95], [85, 95], [110, 110], [175, 110], [235, 110], [260, 55], [TRAIN_STOP_X, 55]],
+  2: [[15, 95], [85, 95], [110, 110], [175, 110], [235, 110], [260, 140], [TRAIN_STOP_X, 140]],
+  3: [[15, 95], [85, 95], [110, 110], [175, 170], [235, 170], [260, 225], [TRAIN_STOP_X, 225]],
 };
 
 const DEPARTURE_POINTS = {
-  1: [[305, 55], [260, 55], [235, 110], [195, 170], [135, 170], [85, 185], [15, 185]],
-  2: [[305, 140], [260, 140], [235, 170], [195, 170], [135, 170], [85, 185], [15, 185]],
-  3: [[305, 225], [260, 225], [235, 170], [195, 170], [135, 170], [85, 185], [15, 185]],
+  1: [[TRAIN_STOP_X, 55], [260, 55], [235, 110], [195, 170], [135, 170], [85, 185], [15, 185]],
+  2: [[TRAIN_STOP_X, 140], [260, 140], [235, 170], [195, 170], [135, 170], [85, 185], [15, 185]],
+  3: [[TRAIN_STOP_X, 225], [260, 225], [235, 170], [195, 170], [135, 170], [85, 185], [15, 185]],
 };
 
 const routesConflict = (a, b) => Boolean(a && b && a.locks.some((lock) => b.locks.includes(lock)));
 const pct = (value, max) => Math.max(0, Math.min(100, Math.round((value / Math.max(1, max)) * 100)));
 
-function movementPosition(progress, points, scaleX, scaleY) {
+const unitWidth = (train) => {
+  if (train.type.code === 'EXP') return 38;
+  if (train.type.code === 'IC') return 34;
+  return 28;
+};
+
+const consistWidth = (train) => train.sets * unitWidth(train) + Math.max(0, train.sets - 1) * 5;
+
+function movementPosition(progress, points, scaleX, scaleY, train) {
+  const width = consistWidth(train);
   return {
-    x: progress.interpolate({ inputRange: MOTION_RANGE, outputRange: points.map(([x]) => x * scaleX - 28) }),
-    y: progress.interpolate({ inputRange: MOTION_RANGE, outputRange: points.map(([, y]) => y * scaleY - 13) }),
+    x: progress.interpolate({ inputRange: MOTION_RANGE, outputRange: points.map(([x]) => x * scaleX - width / 2) }),
+    y: progress.interpolate({ inputRange: MOTION_RANGE, outputRange: points.map(([, y]) => y * scaleY - 15) }),
   };
 }
 
@@ -85,33 +101,59 @@ function Signal({ x, y, green, label }) {
   );
 }
 
-function MiniTrain({ train, detail, style }) {
+function TrainConsist({ train, detail, style, compact = false }) {
+  const width = unitWidth(train);
   return (
-    <View pointerEvents="none" style={[styles.miniTrain, style]}>
-      <Text style={styles.miniTrainId}>{train.id}</Text>
-      <Text style={styles.miniTrainDetail}>{detail || `${train.type.code} ${train.sets}×`}</Text>
+    <View pointerEvents="none" style={[styles.consistWrap, style]}>
+      <View style={styles.consistUnits}>
+        {Array.from({ length: train.sets }).map((_, index) => (
+          <React.Fragment key={`${train.id}-unit-${index}`}>
+            {index > 0 ? <View style={styles.coupler} /> : null}
+            <View style={[styles.consistUnit, { width }, compact && styles.consistUnitCompact]}>
+              <View style={styles.cabBand} />
+              <View style={styles.windowsRow}>
+                <View style={styles.windowDot} />
+                <View style={styles.windowDot} />
+                {width >= 34 ? <View style={styles.windowDot} /> : null}
+              </View>
+              <Text style={styles.consistCode}>{train.type.code}</Text>
+            </View>
+          </React.Fragment>
+        ))}
+      </View>
+      <Text numberOfLines={1} style={styles.consistId}>{train.id}</Text>
+      <Text numberOfLines={1} style={styles.consistDetail}>{detail || `${train.sets} stellen • ${train.length} m`}</Text>
     </View>
   );
 }
 
 function DispatcherTableau({ boardSize, onLayout, platforms, arrivalTrain, arrivalLane, arrivalProgress, departureTrain, departureLane, departureProgress }) {
-  const scaleX = boardSize.width / 380 || 1;
-  const scaleY = boardSize.height / 280 || 1;
-  const arrivalPos = movementPosition(arrivalProgress, ARRIVAL_POINTS[arrivalLane || 1], scaleX, scaleY);
-  const departurePos = movementPosition(departureProgress, DEPARTURE_POINTS[departureLane || 1], scaleX, scaleY);
+  const scaleX = boardSize.width / BOARD_W || 1;
+  const scaleY = boardSize.height / BOARD_H || 1;
+  const arrivalPos = arrivalTrain ? movementPosition(arrivalProgress, ARRIVAL_POINTS[arrivalLane || 1], scaleX, scaleY, arrivalTrain) : null;
+  const departurePos = departureTrain ? movementPosition(departureProgress, DEPARTURE_POINTS[departureLane || 1], scaleX, scaleY, departureTrain) : null;
 
   return (
     <View style={styles.tableauFrame}>
       <View style={styles.tableauHeader}>
-        <Text style={styles.tableauTitle}>SPOORLAAG — WISSELSTRAAT</Text>
+        <Text style={styles.tableauTitle}>SPOORLAAG — WISSELSTRAAT + VOLLEDIGE PERRONS</Text>
         <Text style={styles.tableauStatus}>{arrivalTrain && departureTrain ? '2 RIJWEGEN' : arrivalTrain || departureTrain ? 'RIJWEG ACTIEF' : 'VRIJ'}</Text>
       </View>
       <View style={styles.svgArea} onLayout={(e) => onLayout(e.nativeEvent.layout)}>
-        <Svg width="100%" height="100%" viewBox="0 0 380 280">
-          <Rect x="1" y="1" width="378" height="278" rx="10" fill="#081016" stroke="#26343f" strokeWidth="2" />
+        <Svg width="100%" height="100%" viewBox={`0 0 ${BOARD_W} ${BOARD_H}`}>
+          <Rect x="1" y="1" width={BOARD_W - 2} height={BOARD_H - 2} rx="10" fill="#081016" stroke="#26343f" strokeWidth="2" />
+
+          {LANES.map((lane) => (
+            <React.Fragment key={`platform-${lane}`}>
+              <Rect x={PLATFORM_START} y={TRACK_Y[lane] + 10} width={PLATFORM_END - PLATFORM_START} height="12" rx="3" fill="#18242c" stroke="#3c4c56" strokeWidth="1" />
+              <Path d={`M ${PLATFORM_START + 4} ${TRACK_Y[lane] + 13} H ${PLATFORM_END - 4}`} stroke="#6e7d86" strokeWidth="1" strokeDasharray="4 4" />
+              <SvgText x={PLATFORM_END - 2} y={TRACK_Y[lane] + 35} fill="#657681" fontSize="7.5" fontWeight="900" textAnchor="end">P{lane} • 240 m</SvgText>
+            </React.Fragment>
+          ))}
+
           {Object.entries(SEGMENTS).map(([id, d]) => <Path key={id} d={d} fill="none" stroke="#45525c" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />)}
           {LANES.map((lane) => platforms[lane] ? (
-            <Path key={`occ-${lane}`} d={lane === 1 ? 'M 268 55 H 335' : lane === 2 ? 'M 268 140 H 335' : 'M 268 225 H 335'} fill="none" stroke="#ff4d6d" strokeWidth="9" strokeLinecap="round" />
+            <Path key={`occ-${lane}`} d={`M ${PLATFORM_START + 4} ${TRACK_Y[lane]} H ${PLATFORM_END}`} fill="none" stroke="#ff4d6d" strokeWidth="8" strokeLinecap="round" />
           ) : null)}
           <RouteHighlight route={arrivalTrain ? ARRIVAL_ROUTES[arrivalLane] : null} color="#ffd65a" />
           <RouteHighlight route={departureTrain ? DEPARTURE_ROUTES[departureLane] : null} color="#66d8ff" />
@@ -122,11 +164,11 @@ function DispatcherTableau({ boardSize, onLayout, platforms, arrivalTrain, arriv
           <SvgText x="206" y="132" fill="#9aa8b1" fontSize="8" fontWeight="900">K1</SvgText>
           <Signal x={52} y={70} green={Boolean(arrivalTrain)} label="S1" />
           <Signal x={52} y={210} green={Boolean(departureTrain)} label="S2" />
-          {LANES.map((lane) => <Signal key={lane} x={285} y={TRACK_Y[lane] - 23} green={Boolean(departureTrain) && departureLane === lane} label={`D${lane}`} />)}
+          {LANES.map((lane) => <Signal key={lane} x={286} y={TRACK_Y[lane] - 23} green={Boolean(departureTrain) && departureLane === lane} label={`D${lane}`} />)}
           {LANES.map((lane) => (
             <React.Fragment key={`p-${lane}`}>
-              <Rect x="342" y={TRACK_Y[lane] - 14} width="28" height="28" rx="5" fill="#101b23" stroke="#364650" />
-              <SvgText x="356" y={TRACK_Y[lane] + 5} fill="#e8eef2" fontSize="13" fontWeight="900" textAnchor="middle">{lane}</SvgText>
+              <Rect x="435" y={TRACK_Y[lane] - 13} width="20" height="26" rx="4" fill="#101b23" stroke="#364650" />
+              <SvgText x="445" y={TRACK_Y[lane] + 5} fill="#e8eef2" fontSize="11" fontWeight="900" textAnchor="middle">{lane}</SvgText>
             </React.Fragment>
           ))}
           <SvgText x="13" y="84" fill="#6f808b" fontSize="8" fontWeight="800">WEST IN →</SvgText>
@@ -136,16 +178,27 @@ function DispatcherTableau({ boardSize, onLayout, platforms, arrivalTrain, arriv
         {boardSize.width > 0 && LANES.map((lane) => {
           const train = platforms[lane];
           if (!train || (departureTrain && departureTrain.id === train.id)) return null;
-          return <MiniTrain key={train.id} train={train} style={{ position: 'absolute', left: 286 * scaleX - 28, top: TRACK_Y[lane] * scaleY - 13 }} />;
+          const width = consistWidth(train);
+          return (
+            <TrainConsist
+              key={train.id}
+              train={train}
+              compact
+              detail={`${pct(train.onboard, train.capacity)}% • ${train.sets}×`}
+              style={{ position: 'absolute', left: TRAIN_STOP_X * scaleX - width / 2, top: TRACK_Y[lane] * scaleY - 15 }}
+            />
+          );
         })}
-        {boardSize.width > 0 && arrivalTrain ? (
-          <Animated.View pointerEvents="none" style={[styles.miniTrain, styles.movingTrain, { transform: [{ translateX: arrivalPos.x }, { translateY: arrivalPos.y }] }]}>
-            <Text style={styles.miniTrainId}>{arrivalTrain.id}</Text><Text style={styles.miniTrainDetail}>→ P{arrivalLane}</Text>
+
+        {boardSize.width > 0 && arrivalTrain && arrivalPos ? (
+          <Animated.View pointerEvents="none" style={[styles.movingConsist, { transform: [{ translateX: arrivalPos.x }, { translateY: arrivalPos.y }] }]}>
+            <TrainConsist train={arrivalTrain} compact detail={`→ P${arrivalLane} • ${arrivalTrain.sets}×`} />
           </Animated.View>
         ) : null}
-        {boardSize.width > 0 && departureTrain ? (
-          <Animated.View pointerEvents="none" style={[styles.miniTrain, styles.movingTrain, { transform: [{ translateX: departurePos.x }, { translateY: departurePos.y }] }]}>
-            <Text style={styles.miniTrainId}>{departureTrain.id}</Text><Text style={styles.miniTrainDetail}>← WEST</Text>
+
+        {boardSize.width > 0 && departureTrain && departurePos ? (
+          <Animated.View pointerEvents="none" style={[styles.movingConsist, { transform: [{ translateX: departurePos.x }, { translateY: departurePos.y }] }]}>
+            <TrainConsist train={departureTrain} compact detail={`← WEST • ${departureTrain.sets}×`} />
           </Animated.View>
         ) : null}
       </View>
@@ -165,7 +218,14 @@ function Bar({ value, max, warningAt = 85 }) {
 function TrainComposition({ train }) {
   return (
     <View style={styles.compositionRow}>
-      {Array.from({ length: train.sets }).map((_, index) => <View key={index} style={styles.setBlock}><Text style={styles.setBlockText}>{index + 1}</Text></View>)}
+      {Array.from({ length: train.sets }).map((_, index) => (
+        <React.Fragment key={index}>
+          {index > 0 ? <View style={styles.compositionCoupler} /> : null}
+          <View style={[styles.setBlock, { flexBasis: `${Math.min(32, 100 / train.sets)}%` }]}>
+            <Text style={styles.setBlockText}>{train.type.code} {index + 1}</Text>
+          </View>
+        </React.Fragment>
+      ))}
     </View>
   );
 }
@@ -176,6 +236,7 @@ function PlatformCard({ lane, train, waiting, onDepart, departureBlocked }) {
     return (
       <View style={styles.platformCard}>
         <View style={styles.platformTop}><Text style={styles.platformTitle}>PERRON {lane}</Text><Text style={styles.freeBadge}>VRIJ</Text></View>
+        <View style={styles.platformSchematic}><View style={styles.platformEdge} /><Text style={styles.platformLengthLabel}>240 m perronlengte</Text></View>
         <Text style={styles.waitingBig}>{waiting}</Text><Text style={styles.waitingLabel}>wachtende reizigers</Text>
         <Bar value={waiting} max={crowdCapacity} />
         <Text style={styles.platformHint}>Volgend materieel kan hier worden binnengehaald.</Text>
@@ -195,12 +256,17 @@ function PlatformCard({ lane, train, waiting, onDepart, departureBlocked }) {
         <Text style={[styles.statusBadge, train.status === 'ready' && styles.readyBadge]}>{train.status === 'ready' ? 'GEREED' : `${train.remaining}s`}</Text>
       </View>
 
+      <View style={styles.platformSchematic}>
+        <View style={styles.platformEdge} />
+        <TrainComposition train={train} />
+        <Text style={styles.platformLengthLabel}>{train.length} m trein op 240 m perron</Text>
+      </View>
+
       <View style={styles.trainMetaRow}>
         <View style={styles.metaCell}><Text style={styles.metaLabel}>STELLEN</Text><Text style={styles.metaValue}>{train.sets}×</Text></View>
         <View style={styles.metaCell}><Text style={styles.metaLabel}>LENGTE</Text><Text style={styles.metaValue}>{train.length} m</Text></View>
         <View style={styles.metaCell}><Text style={styles.metaLabel}>CAPACITEIT</Text><Text style={styles.metaValue}>{train.capacity}</Text></View>
       </View>
-      <TrainComposition train={train} />
 
       <View style={styles.metricHeader}><Text style={styles.metricLabel}>TREINBEZETTING</Text><Text style={styles.metricValue}>{train.onboard} / {train.capacity} • {fill}%</Text></View>
       <Bar value={train.onboard} max={train.capacity} warningAt={94} />
@@ -275,8 +341,9 @@ export default function App() {
       let boardedThisTick = 0;
       let addedDelay = 0;
       LANES.forEach((lane) => {
-        const train = nextPlatforms[lane];
-        if (!train || train.status === 'departing') return;
+        const currentTrain = nextPlatforms[lane];
+        if (!currentTrain || currentTrain.status === 'departing') return;
+        const train = { ...currentTrain };
 
         const free = Math.max(0, train.capacity - train.onboard);
         const board = Math.min(free, nextWaiting[lane], train.type.boardRate);
@@ -293,7 +360,7 @@ export default function App() {
           train.readyWait = (train.readyWait || 0) + 1;
           addedDelay += 1;
         }
-        nextPlatforms[lane] = { ...train };
+        nextPlatforms[lane] = train;
       });
 
       const nextQueue = queueRef.current.map((train) => ({ ...train, wait: train.wait + 1 }));
@@ -323,7 +390,7 @@ export default function App() {
     setArrivalTrain(train);
     setArrivalLane(lane);
     arrivalProgress.setValue(0);
-    setMessage(`${train.id} binnen naar P${lane}${lane !== train.target ? ` — spoorwijziging vanaf P${train.target}` : ''}.`);
+    setMessage(`${train.id} (${train.sets} stellen / ${train.length} m) binnen naar P${lane}${lane !== train.target ? ` — spoorwijziging vanaf P${train.target}` : ''}.`);
 
     Animated.timing(arrivalProgress, { toValue: 1, duration: ARRIVAL_MS, useNativeDriver: true }).start(({ finished }) => {
       arrivalBusyRef.current = false;
@@ -333,7 +400,7 @@ export default function App() {
       syncPlatforms(next);
       setArrivalTrain(null);
       setArrivalLane(null);
-      setMessage(`${train.id} op P${lane}: deuren open, reizigers wisselen.`);
+      setMessage(`${train.id} volledig langs P${lane}: deuren open, reizigers wisselen.`);
     });
   };
 
@@ -348,7 +415,7 @@ export default function App() {
     setDepartureTrain(train);
     setDepartureLane(lane);
     departureProgress.setValue(0);
-    setMessage(`${train.id} vertrekt van P${lane} met ${train.onboard}/${train.capacity} reizigers.`);
+    setMessage(`${train.id} vertrekt als ${train.sets}-delige samenstelling van P${lane} met ${train.onboard}/${train.capacity} reizigers.`);
 
     Animated.timing(departureProgress, { toValue: 1, duration: DEPARTURE_MS, useNativeDriver: true }).start(({ finished }) => {
       departureBusyRef.current = false;
@@ -358,7 +425,7 @@ export default function App() {
       setDepartureTrain(null);
       setDepartureLane(null);
       setHandled((v) => v + 1);
-      setMessage(`${train.id} afgehandeld. P${lane} is vrij.`);
+      setMessage(`${train.id} afgehandeld. P${lane} is over de volledige lengte vrij.`);
     });
   };
 
@@ -384,9 +451,9 @@ export default function App() {
       <SafeAreaView style={styles.screen}>
         <StatusBar barStyle="light-content" />
         <View style={styles.menuWrap}>
-          <Text style={styles.kicker}>STATION OPERATIONS / V0.6</Text>
+          <Text style={styles.kicker}>STATION OPERATIONS / V0.6.1</Text>
           <Text style={styles.title}>RAIL{`\n`}RUSH HOUR</Text>
-          <Text style={styles.subtitle}>Beheer materieelcapaciteit, perrondrukte en vertrekbeslissingen. Niet alleen de trein moet goed staan — de reizigers moeten ook mee.</Text>
+          <Text style={styles.subtitle}>Beheer materieelcapaciteit, volledige perrons en reizigersstromen. Iedere rijdende trein toont nu zijn echte samenstelling in stellen.</Text>
           <Pressable style={styles.primaryButton} onPress={startGame}><Text style={styles.primaryButtonText}>OPEN STATION</Text></Pressable>
         </View>
       </SafeAreaView>
@@ -456,7 +523,7 @@ export default function App() {
         ))}
       </ScrollView>
 
-      <View style={styles.footer}><Text style={styles.footerText}>V0.6 • MATERIEEL • CAPACITEIT • PERRONDRUKTE • HANDMATIG VERTREK</Text></View>
+      <View style={styles.footer}><Text style={styles.footerText}>V0.6.1 • VOLLEDIGE PERRONS • ZICHTBARE TREINSTELLEN • CAPACITEIT • HANDMATIG VERTREK</Text></View>
     </SafeAreaView>
   );
 }
@@ -479,12 +546,22 @@ const styles = StyleSheet.create({
 
   tableauFrame: { marginTop: 9, backgroundColor: '#0a1218', borderWidth: 1, borderColor: '#263741', borderRadius: 11, overflow: 'hidden' },
   tableauHeader: { minHeight: 37, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 10, borderBottomWidth: 1, borderBottomColor: '#263741' },
-  tableauTitle: { color: '#9eb0bb', fontSize: 7.6, fontWeight: '900', letterSpacing: 0.8 },
-  tableauStatus: { color: '#ffd65a', fontSize: 7.2, fontWeight: '900' },
-  svgArea: { height: 238, position: 'relative', overflow: 'hidden' },
-  miniTrain: { width: 56, minHeight: 26, borderRadius: 4, backgroundColor: '#d9edf8', borderWidth: 2, borderColor: '#081016', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 2 },
-  movingTrain: { position: 'absolute', left: 0, top: 0 },
-  miniTrainId: { color: '#0b151c', fontSize: 7.5, fontWeight: '900' }, miniTrainDetail: { color: '#31566c', fontSize: 6.7, fontWeight: '900' },
+  tableauTitle: { flex: 1, color: '#9eb0bb', fontSize: 7.2, fontWeight: '900', letterSpacing: 0.6 },
+  tableauStatus: { color: '#ffd65a', fontSize: 7, fontWeight: '900', marginLeft: 8 },
+  svgArea: { height: 226, position: 'relative', overflow: 'hidden' },
+
+  consistWrap: { alignItems: 'center', justifyContent: 'center' },
+  consistUnits: { flexDirection: 'row', alignItems: 'center', height: 19 },
+  consistUnit: { height: 17, backgroundColor: '#d9edf8', borderWidth: 1.5, borderColor: '#081016', borderRadius: 3, overflow: 'hidden', justifyContent: 'center' },
+  consistUnitCompact: { height: 15 },
+  cabBand: { position: 'absolute', left: 0, top: 0, bottom: 0, width: 4, backgroundColor: '#6ba5c3' },
+  windowsRow: { position: 'absolute', left: 7, right: 3, top: 3, flexDirection: 'row', justifyContent: 'space-around' },
+  windowDot: { width: 4, height: 3, borderRadius: 1, backgroundColor: '#31566c' },
+  consistCode: { color: '#173443', fontSize: 5.5, fontWeight: '900', textAlign: 'center', marginTop: 5 },
+  coupler: { width: 5, height: 3, backgroundColor: '#6f7c84' },
+  consistId: { color: '#d8e8ef', fontSize: 6.4, lineHeight: 8, fontWeight: '900', backgroundColor: '#101920', paddingHorizontal: 3, borderRadius: 2, marginTop: 1 },
+  consistDetail: { color: '#7a9daf', fontSize: 5.4, lineHeight: 7, fontWeight: '900', backgroundColor: '#101920', paddingHorizontal: 2, borderRadius: 2 },
+  movingConsist: { position: 'absolute', left: 0, top: 0 },
 
   messageStrip: { minHeight: 37, flexDirection: 'row', alignItems: 'center', marginTop: 8, paddingHorizontal: 10, backgroundColor: '#0a1218', borderWidth: 1, borderColor: '#20303a', borderRadius: 8 },
   messageLamp: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#58b9ff', marginRight: 8 },
@@ -499,8 +576,11 @@ const styles = StyleSheet.create({
   trainMetaRow: { flexDirection: 'row', gap: 6, marginTop: 9 },
   metaCell: { flex: 1, backgroundColor: '#091117', borderRadius: 6, paddingVertical: 6, alignItems: 'center' },
   metaLabel: { color: '#5f7480', fontSize: 6.2, fontWeight: '900', letterSpacing: 0.7 }, metaValue: { color: '#dce7ec', fontSize: 11, fontWeight: '900', marginTop: 2 },
-  compositionRow: { flexDirection: 'row', gap: 3, marginTop: 7 },
-  setBlock: { flex: 1, maxWidth: 95, height: 12, backgroundColor: '#40677d', borderRadius: 3, alignItems: 'center', justifyContent: 'center' }, setBlockText: { color: '#d8edf7', fontSize: 6, fontWeight: '900' },
+
+  compositionRow: { flexDirection: 'row', alignItems: 'center', gap: 0, marginTop: 7 },
+  compositionCoupler: { width: 5, height: 3, backgroundColor: '#71808a' },
+  setBlock: { maxWidth: 105, minWidth: 45, height: 14, backgroundColor: '#40677d', borderRadius: 3, alignItems: 'center', justifyContent: 'center' },
+  setBlockText: { color: '#d8edf7', fontSize: 6, fontWeight: '900' },
 
   routeRow: { flexDirection: 'row', gap: 6, marginTop: 10 },
   routeButton: { flex: 1, minHeight: 58, alignItems: 'center', justifyContent: 'center', backgroundColor: '#111c23', borderWidth: 1, borderColor: '#40505a', borderRadius: 7 },
@@ -517,6 +597,10 @@ const styles = StyleSheet.create({
   waitingBig: { color: '#e6eef2', fontSize: 28, fontWeight: '900', marginTop: 9 }, waitingLabel: { color: '#758893', fontSize: 8, fontWeight: '800', marginBottom: 6 },
   platformHint: { color: '#53656f', fontSize: 8, fontWeight: '700', marginTop: 7 },
 
+  platformSchematic: { marginTop: 8, paddingTop: 7, paddingBottom: 5, minHeight: 38, justifyContent: 'center' },
+  platformEdge: { position: 'absolute', left: 0, right: 0, top: 1, height: 6, borderRadius: 2, backgroundColor: '#26343d', borderTopWidth: 1, borderTopColor: '#64737c' },
+  platformLengthLabel: { color: '#596d78', fontSize: 6.5, fontWeight: '800', marginTop: 4 },
+
   metricHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 9, marginBottom: 4 },
   metricLabel: { color: '#647985', fontSize: 6.5, fontWeight: '900', letterSpacing: 0.7 }, metricValue: { color: '#d5e0e5', fontSize: 8.5, fontWeight: '900' }, dangerText: { color: '#ff7182' },
   barTrack: { height: 8, borderRadius: 4, backgroundColor: '#1a2730', overflow: 'hidden' }, barFill: { height: '100%', borderRadius: 4, backgroundColor: '#58b9ff' }, barFillWarning: { backgroundColor: '#ff6677' },
@@ -527,5 +611,5 @@ const styles = StyleSheet.create({
   holdHint: { color: '#b49c53', fontSize: 7.5, lineHeight: 11, textAlign: 'center', marginTop: 6, fontWeight: '700' },
   emptyText: { color: '#60717c', fontSize: 9, fontWeight: '700', marginTop: 10 },
 
-  footer: { alignItems: 'center', paddingVertical: 7, paddingHorizontal: 8, borderTopWidth: 1, borderTopColor: '#14212a' }, footerText: { color: '#42535e', fontSize: 6.5, fontWeight: '900', textAlign: 'center' },
+  footer: { alignItems: 'center', paddingVertical: 7, paddingHorizontal: 8, borderTopWidth: 1, borderTopColor: '#14212a' }, footerText: { color: '#42535e', fontSize: 6.3, fontWeight: '900', textAlign: 'center' },
 });
