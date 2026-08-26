@@ -3,6 +3,7 @@ import {
   Animated,
   Pressable,
   SafeAreaView,
+  ScrollView,
   StatusBar,
   StyleSheet,
   Text,
@@ -36,11 +37,7 @@ function Signal({ x, y, green = false, label }) {
       <Rect x={x - 8} y={y - 11} width="16" height="22" rx="5" fill="#101820" stroke="#697580" strokeWidth="2" />
       <Circle cx={x} cy={y - 4} r="4.7" fill={green ? '#38e27d' : '#ff4d5f'} />
       <Circle cx={x} cy={y + 5} r="2.7" fill="#26313b" />
-      {label ? (
-        <SvgText x={x - 13} y={y + 37} fill="#71808d" fontSize="8.5" fontWeight="700">
-          {label}
-        </SvgText>
-      ) : null}
+      <SvgText x={x - 13} y={y + 37} fill="#71808d" fontSize="8.5" fontWeight="700">{label}</SvgText>
     </>
   );
 }
@@ -113,7 +110,6 @@ function DispatcherTableau({
       <View style={styles.svgArea} onLayout={(event) => onLayout(event.nativeEvent.layout)}>
         <Svg width="100%" height="100%" viewBox="0 0 360 260">
           <Rect x="1" y="1" width="358" height="258" rx="10" fill="#081016" stroke="#26343f" strokeWidth="2" />
-
           <Line x1="18" y1={WEST_IN_Y} x2="105" y2={WEST_IN_Y} stroke="#56636d" strokeWidth="5" strokeLinecap="round" />
           <Line x1="18" y1={WEST_OUT_Y} x2="110" y2={WEST_OUT_Y} stroke="#56636d" strokeWidth="5" strokeLinecap="round" />
 
@@ -125,24 +121,11 @@ function DispatcherTableau({
           ))}
 
           {ROUTES.map((lane) => platforms[lane] ? (
-            <Line
-              key={`occupied-${lane}`}
-              x1="232"
-              y1={TRACK_Y[lane]}
-              x2="315"
-              y2={TRACK_Y[lane]}
-              stroke="#ff4d6d"
-              strokeWidth="9"
-              strokeLinecap="round"
-            />
+            <Line key={`occ-${lane}`} x1="232" y1={TRACK_Y[lane]} x2="315" y2={TRACK_Y[lane]} stroke="#ff4d6d" strokeWidth="9" strokeLinecap="round" />
           ) : null)}
 
-          {arrivalTrain && arrivalLane ? (
-            <Path d={arrivalPath(arrivalLane)} fill="none" stroke="#ffd65a" strokeWidth="7" strokeLinecap="round" strokeLinejoin="round" />
-          ) : null}
-          {departureTrain && departureLane ? (
-            <Path d={departurePath(departureLane)} fill="none" stroke="#ffd65a" strokeWidth="7" strokeLinecap="round" strokeLinejoin="round" />
-          ) : null}
+          {arrivalTrain && arrivalLane ? <Path d={arrivalPath(arrivalLane)} fill="none" stroke="#ffd65a" strokeWidth="7" strokeLinecap="round" strokeLinejoin="round" /> : null}
+          {departureTrain && departureLane ? <Path d={departurePath(departureLane)} fill="none" stroke="#ffd65a" strokeWidth="7" strokeLinecap="round" strokeLinejoin="round" /> : null}
 
           <Circle cx="105" cy={WEST_IN_Y} r="7" fill="#0b151d" stroke={arrivalTrain ? '#ffd65a' : '#93a0aa'} strokeWidth="3" />
           <SvgText x="90" y="84" fill="#83919d" fontSize="9" fontWeight="700">W1</SvgText>
@@ -151,33 +134,18 @@ function DispatcherTableau({
 
           <Signal x={62} y={73} green={Boolean(arrivalTrain)} label="S1" />
           <Signal x={62} y={187} green={Boolean(departureTrain)} label="S2" />
-
-          {ROUTES.map((lane) => (
-            <Signal
-              key={`d-${lane}`}
-              x={238}
-              y={TRACK_Y[lane] - 23}
-              green={Boolean(departureTrain) && departureLane === lane}
-              label={`D${lane}`}
-            />
-          ))}
+          {ROUTES.map((lane) => <Signal key={lane} x={238} y={TRACK_Y[lane] - 23} green={Boolean(departureTrain) && departureLane === lane} label={`D${lane}`} />)}
 
           {ROUTES.map((lane) => (
             <React.Fragment key={`label-${lane}`}>
               <Rect x="326" y={TRACK_Y[lane] - 14} width="27" height="28" rx="5" fill="#101b23" stroke="#364650" />
-              <SvgText x="339.5" y={TRACK_Y[lane] + 5} fill="#e8eef2" fontSize="13" fontWeight="800" textAnchor="middle">
-                {lane}
-              </SvgText>
+              <SvgText x="339.5" y={TRACK_Y[lane] + 5} fill="#e8eef2" fontSize="13" fontWeight="800" textAnchor="middle">{lane}</SvgText>
             </React.Fragment>
           ))}
 
-          {queueHead ? (
-            <Circle cx="343" cy={TRACK_Y[queueHead.target] - 22} r="5" fill="#58b9ff" />
-          ) : null}
-
+          {queueHead ? <Circle cx="343" cy={TRACK_Y[queueHead.target] - 22} r="5" fill="#58b9ff" /> : null}
           <SvgText x="14" y="90" fill="#6f808b" fontSize="8" fontWeight="800">WEST IN →</SvgText>
           <SvgText x="14" y="177" fill="#6f808b" fontSize="8" fontWeight="800">← WEST UIT</SvgText>
-          <SvgText x="286" y="240" fill="#596b76" fontSize="8" fontWeight="800">PERRONS</SvgText>
         </Svg>
 
         {boardSize.width > 0 && ROUTES.map((lane) => {
@@ -187,39 +155,21 @@ function DispatcherTableau({
             <TrainBlock
               key={train.id}
               id={train.id}
-              detail={train.status === 'ready' ? 'GEREED' : `${train.remaining}s`}
-              style={{
-                position: 'absolute',
-                left: 250 * scaleX - 29,
-                top: TRACK_Y[lane] * scaleY - 14,
-              }}
+              detail={train.status === 'ready' ? 'GEREED' : train.status === 'departing' ? 'UIT' : `${train.remaining}s`}
+              style={{ position: 'absolute', left: 250 * scaleX - 29, top: TRACK_Y[lane] * scaleY - 14 }}
             />
           );
         })}
 
         {boardSize.width > 0 && arrivalTrain ? (
-          <Animated.View
-            pointerEvents="none"
-            style={[
-              styles.trainBlock,
-              styles.movingTrain,
-              { transform: [{ translateX: arrivalX }, { translateY: arrivalY }] },
-            ]}
-          >
+          <Animated.View pointerEvents="none" style={[styles.trainBlock, styles.movingTrain, { transform: [{ translateX: arrivalX }, { translateY: arrivalY }] }]}>
             <Text style={styles.trainBlockId}>{arrivalTrain.id}</Text>
             <Text style={styles.trainBlockDest}>→ P{arrivalLane}</Text>
           </Animated.View>
         ) : null}
 
         {boardSize.width > 0 && departureTrain ? (
-          <Animated.View
-            pointerEvents="none"
-            style={[
-              styles.trainBlock,
-              styles.movingTrain,
-              { transform: [{ translateX: departureX }, { translateY: departureY }] },
-            ]}
-          >
+          <Animated.View pointerEvents="none" style={[styles.trainBlock, styles.movingTrain, { transform: [{ translateX: departureX }, { translateY: departureY }] }]}>
             <Text style={styles.trainBlockId}>{departureTrain.id}</Text>
             <Text style={styles.trainBlockDest}>← WEST</Text>
           </Animated.View>
@@ -260,53 +210,59 @@ export default function App() {
   const comboRef = useRef(0);
   const livesRef = useRef(3);
   const trainSequence = useRef(280);
+  const queueRef = useRef([]);
+  const platformsRef = useRef({ 1: null, 2: null, 3: null });
+  const arrivalBusyRef = useRef(false);
+  const departureBusyRef = useRef(false);
+
+  const replaceQueue = (updater) => {
+    setQueue((current) => {
+      const next = typeof updater === 'function' ? updater(current) : updater;
+      queueRef.current = next;
+      return next;
+    });
+  };
+
+  const replacePlatforms = (updater) => {
+    setPlatforms((current) => {
+      const next = typeof updater === 'function' ? updater(current) : updater;
+      platformsRef.current = next;
+      return next;
+    });
+  };
 
   const createTrain = () => {
     trainSequence.current += Math.random() > 0.5 ? 2 : 4;
-    return {
-      id: `IC ${trainSequence.current}`,
-      target: Math.floor(Math.random() * 3) + 1,
-      wait: 0,
-    };
+    return { id: `IC ${trainSequence.current}`, target: Math.floor(Math.random() * 3) + 1, wait: 0 };
   };
 
   useEffect(() => {
     if (phase !== 'playing') return undefined;
 
     const clock = setInterval(() => {
-      setQueue((current) => {
+      replaceQueue((current) => {
         const updated = current.map((train) => ({ ...train, wait: train.wait + 1 }));
         const delayed = updated.filter((train) => train.wait > 5).length;
-        if (delayed > 0) setTotalDelay((value) => value + delayed);
+        if (delayed) setTotalDelay((value) => value + delayed);
         return updated;
       });
 
-      setPlatforms((current) => {
-        let changed = false;
+      replacePlatforms((current) => {
         const next = { ...current };
+        let changed = false;
         ROUTES.forEach((lane) => {
           const train = current[lane];
           if (!train || train.status !== 'dwelling') return;
           changed = true;
           const remaining = Math.max(0, train.remaining - 1);
-          next[lane] = {
-            ...train,
-            remaining,
-            status: remaining === 0 ? 'ready' : 'dwelling',
-          };
+          next[lane] = { ...train, remaining, status: remaining === 0 ? 'ready' : 'dwelling' };
         });
         return changed ? next : current;
       });
     }, 1000);
 
-    const spawner = setInterval(() => {
-      setQueue((current) => [...current, createTrain()]);
-    }, SPAWN_MS);
-
-    return () => {
-      clearInterval(clock);
-      clearInterval(spawner);
-    };
+    const spawner = setInterval(() => replaceQueue((current) => [...current, createTrain()]), SPAWN_MS);
+    return () => { clearInterval(clock); clearInterval(spawner); };
   }, [phase]);
 
   useEffect(() => () => {
@@ -314,43 +270,47 @@ export default function App() {
     if (departureAnimation.current) departureAnimation.current.stop();
   }, []);
 
-  const setGameOverIfNeeded = (nextLives) => {
-    if (nextLives <= 0) {
-      setTimeout(() => setPhase('gameover'), 350);
-      return true;
-    }
-    return false;
+  const loseLife = () => {
+    const nextLives = livesRef.current - 1;
+    livesRef.current = nextLives;
+    setLives(nextLives);
+    comboRef.current = 0;
+    setCombo(0);
+    if (nextLives <= 0) setTimeout(() => setPhase('gameover'), 350);
   };
 
   const chooseArrivalRoute = (lane) => {
-    if (phase !== 'playing' || arrivalTrain || queue.length === 0 || platforms[lane]) return;
+    const waiting = queueRef.current[0];
+    if (phase !== 'playing') return;
+    if (arrivalBusyRef.current) { setMessage('Aankomstrijweg is al bezet.'); return; }
+    if (!waiting) { setMessage('Geen trein wacht op WEST IN.'); return; }
+    if (platformsRef.current[lane]) { setMessage(`P${lane} is bezet.`); return; }
 
-    const train = queue[0];
-    setQueue((current) => current.slice(1));
-    setArrivalTrain(train);
+    arrivalBusyRef.current = true;
+    replaceQueue((current) => current.slice(1));
+    setArrivalTrain(waiting);
     setArrivalLane(lane);
     arrivalProgress.setValue(0);
-    setMessage(`${train.id}: rijweg WEST IN → P${lane} ingesteld.`);
+    setMessage(`${waiting.id}: rijweg WEST IN → P${lane} ingesteld.`);
 
-    const duration = Math.max(1300, 2500 - Math.floor(scoreRef.current / 70) * 90);
     const animation = Animated.timing(arrivalProgress, {
       toValue: 1,
-      duration,
+      duration: Math.max(1300, 2500 - Math.floor(scoreRef.current / 70) * 90),
       useNativeDriver: true,
     });
     arrivalAnimation.current = animation;
     animation.start(({ finished }) => {
+      arrivalBusyRef.current = false;
       if (!finished) return;
 
-      const correct = lane === train.target;
-      setPlatforms((current) => ({
+      replacePlatforms((current) => ({
         ...current,
-        [lane]: { ...train, lane, status: 'dwelling', remaining: DWELL_SECONDS },
+        [lane]: { ...waiting, lane, status: 'dwelling', remaining: DWELL_SECONDS },
       }));
       setArrivalTrain(null);
       setArrivalLane(null);
 
-      if (correct) {
+      if (lane === waiting.target) {
         const nextCombo = comboRef.current + 1;
         const gained = 15 + Math.min(45, nextCombo * 3);
         comboRef.current = nextCombo;
@@ -358,32 +318,31 @@ export default function App() {
         setCombo(nextCombo);
         setScore(scoreRef.current);
         setCoins((value) => value + 1);
-        setMessage(`${train.id} correct binnen op P${lane}. +${gained}`);
+        setMessage(`${waiting.id} correct binnen op P${lane}. +${gained}`);
       } else {
-        comboRef.current = 0;
-        setCombo(0);
-        const nextLives = livesRef.current - 1;
-        livesRef.current = nextLives;
-        setLives(nextLives);
-        setMessage(`${train.id} staat op P${lane}; gepland was P${train.target}.`);
-        setGameOverIfNeeded(nextLives);
+        setMessage(`${waiting.id} staat op P${lane}; gepland was P${waiting.target}.`);
+        loseLife();
       }
     });
   };
 
   const dispatchDeparture = (lane) => {
-    if (phase !== 'playing' || departureTrain) return;
-    const train = platforms[lane];
-    if (!train || train.status !== 'ready') return;
+    if (phase !== 'playing') return;
+    if (departureBusyRef.current) { setMessage('WEST UIT is al bezet door een vertrekkende trein.'); return; }
 
+    const train = platformsRef.current[lane];
+    if (!train) { setMessage(`P${lane} is al vrij.`); return; }
+    if (train.status !== 'ready') { setMessage(`${train.id} op P${lane} is nog niet gereed.`); return; }
+
+    departureBusyRef.current = true;
+    replacePlatforms((current) => ({
+      ...current,
+      [lane]: current[lane] ? { ...current[lane], status: 'departing' } : null,
+    }));
     setDepartureTrain(train);
     setDepartureLane(lane);
-    setPlatforms((current) => ({
-      ...current,
-      [lane]: { ...current[lane], status: 'departing' },
-    }));
     departureProgress.setValue(0);
-    setMessage(`${train.id}: uitrijweg P${lane} → WEST UIT ingesteld.`);
+    setMessage(`${train.id}: vertrek bevestigd — P${lane} → WEST UIT.`);
 
     const animation = Animated.timing(departureProgress, {
       toValue: 1,
@@ -392,10 +351,15 @@ export default function App() {
     });
     departureAnimation.current = animation;
     animation.start(({ finished }) => {
-      if (!finished) return;
-      setPlatforms((current) => ({ ...current, [lane]: null }));
+      if (!finished) {
+        departureBusyRef.current = false;
+        return;
+      }
+
+      replacePlatforms((current) => ({ ...current, [lane]: null }));
       setDepartureTrain(null);
       setDepartureLane(null);
+      departureBusyRef.current = false;
       scoreRef.current += 5;
       setScore(scoreRef.current);
       setMessage(`${train.id} is via WEST UIT vertrokken. P${lane} vrij. +5`);
@@ -410,18 +374,24 @@ export default function App() {
     scoreRef.current = 0;
     comboRef.current = 0;
     livesRef.current = 3;
+    arrivalBusyRef.current = false;
+    departureBusyRef.current = false;
 
+    const firstQueue = [createTrain()];
+    queueRef.current = firstQueue;
+    platformsRef.current = { 1: null, 2: null, 3: null };
+
+    setQueue(firstQueue);
+    setPlatforms(platformsRef.current);
+    setArrivalTrain(null);
+    setArrivalLane(null);
+    setDepartureTrain(null);
+    setDepartureLane(null);
     setScore(0);
     setCoins(0);
     setLives(3);
     setCombo(0);
     setTotalDelay(0);
-    setPlatforms({ 1: null, 2: null, 3: null });
-    setArrivalTrain(null);
-    setArrivalLane(null);
-    setDepartureTrain(null);
-    setDepartureLane(null);
-    setQueue([createTrain()]);
     setMessage('Post geopend. Eerste trein meldt zich op WEST IN.');
     setPhase('playing');
   };
@@ -431,23 +401,10 @@ export default function App() {
       <SafeAreaView style={styles.screen}>
         <StatusBar barStyle="light-content" />
         <View style={styles.menuWrap}>
-          <View style={styles.brandPlate}>
-            <Text style={styles.kicker}>MULTI-TRAIN DISPATCHER / V0.4</Text>
-            <Text style={styles.title}>RAIL{`\n`}RUSH HOUR</Text>
-            <View style={styles.menuTrack}>
-              <View style={[styles.menuTrackLine, { top: 10 }]} />
-              <View style={[styles.menuTrackLine, { top: 27 }]} />
-              <View style={[styles.menuSignal, styles.menuSignalGreen]} />
-              <View style={[styles.menuSignal, styles.menuSignalRed]} />
-            </View>
-            <Text style={styles.subtitle}>
-              Regel meerdere treinen tegelijk. Houd perrons vrij, haal treinen binnen via WEST IN en laat gekeerde treinen vertrekken via WEST UIT.
-            </Text>
-          </View>
-          <Pressable style={styles.primaryButton} onPress={startGame}>
-            <Text style={styles.primaryButtonText}>START DIENST</Text>
-          </Pressable>
-          <Text style={styles.tip}>aankomst + vertrek • wachtrij • spoorbezetting • vertraging</Text>
+          <Text style={styles.kicker}>MULTI-TRAIN DISPATCHER / V0.4.1</Text>
+          <Text style={styles.title}>RAIL{`\n`}RUSH HOUR</Text>
+          <Text style={styles.subtitle}>Regel meerdere treinen tegelijk. WEST IN voor aankomsten, WEST UIT voor gekeerde treinen.</Text>
+          <Pressable style={styles.primaryButton} onPress={startGame}><Text style={styles.primaryButtonText}>START DIENST</Text></Pressable>
         </View>
       </SafeAreaView>
     );
@@ -463,15 +420,10 @@ export default function App() {
           <View style={styles.resultCard}>
             <Text style={styles.resultLabel}>EINDSCORE</Text>
             <Text style={styles.resultScore}>{score}</Text>
-            <View style={styles.resultDivider} />
-            <Text style={styles.resultCoins}>COINS {coins}  •  VERTRAGING {totalDelay}s</Text>
+            <Text style={styles.resultCoins}>COINS {coins} • VERTRAGING {totalDelay}s</Text>
           </View>
-          <Pressable style={styles.primaryButton} onPress={startGame}>
-            <Text style={styles.primaryButtonText}>NIEUWE DIENST</Text>
-          </Pressable>
-          <Pressable style={styles.secondaryButton} onPress={() => setPhase('menu')}>
-            <Text style={styles.secondaryButtonText}>HOOFDMENU</Text>
-          </Pressable>
+          <Pressable style={styles.primaryButton} onPress={startGame}><Text style={styles.primaryButtonText}>NIEUWE DIENST</Text></Pressable>
+          <Pressable style={styles.secondaryButton} onPress={() => setPhase('menu')}><Text style={styles.secondaryButtonText}>HOOFDMENU</Text></Pressable>
         </View>
       </SafeAreaView>
     );
@@ -484,27 +436,14 @@ export default function App() {
   return (
     <SafeAreaView style={styles.screen}>
       <StatusBar barStyle="light-content" />
-
       <View style={styles.hud}>
-        <View style={styles.hudCell}>
-          <Text style={styles.hudLabel}>SCORE</Text>
-          <Text style={styles.hudValue}>{score}</Text>
-        </View>
-        <View style={[styles.hudCell, styles.hudCenter]}>
-          <Text style={styles.hudLabel}>COMBO</Text>
-          <Text style={styles.hudValue}>x{combo}</Text>
-        </View>
-        <View style={[styles.hudCell, styles.hudCenter]}>
-          <Text style={styles.hudLabel}>VERTR.</Text>
-          <Text style={styles.hudValue}>{totalDelay}s</Text>
-        </View>
-        <View style={[styles.hudCell, styles.hudRight]}>
-          <Text style={styles.hudLabel}>LEVENS</Text>
-          <Text style={styles.lifeText}>{'●'.repeat(lives)}{'○'.repeat(3 - lives)}</Text>
-        </View>
+        <View style={styles.hudCell}><Text style={styles.hudLabel}>SCORE</Text><Text style={styles.hudValue}>{score}</Text></View>
+        <View style={[styles.hudCell, styles.hudCenter]}><Text style={styles.hudLabel}>COMBO</Text><Text style={styles.hudValue}>x{combo}</Text></View>
+        <View style={[styles.hudCell, styles.hudCenter]}><Text style={styles.hudLabel}>VERTR.</Text><Text style={styles.hudValue}>{totalDelay}s</Text></View>
+        <View style={[styles.hudCell, styles.hudRight]}><Text style={styles.hudLabel}>LEVENS</Text><Text style={styles.lifeText}>{'●'.repeat(lives)}{'○'.repeat(3 - lives)}</Text></View>
       </View>
 
-      <View style={styles.content}>
+      <ScrollView style={styles.scroll} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <DispatcherTableau
           boardSize={boardSize}
           onLayout={({ width, height }) => setBoardSize({ width, height })}
@@ -520,39 +459,23 @@ export default function App() {
 
         <View style={styles.infoGrid}>
           <View style={styles.queuePanel}>
-            <View style={styles.panelTitleRow}>
-              <Text style={styles.panelLabel}>WEST IN — WACHTRIJ</Text>
-              <Text style={styles.panelCount}>{queue.length}</Text>
-            </View>
-            {queue.length === 0 ? (
-              <Text style={styles.emptyText}>Geen trein wacht</Text>
-            ) : (
-              queue.slice(0, 2).map((train, index) => (
-                <View key={train.id} style={styles.queueRow}>
-                  <Text style={styles.queuePos}>{index + 1}</Text>
-                  <Text style={styles.queueTrain}>{train.id}</Text>
-                  <Text style={styles.queueTarget}>→ P{train.target}</Text>
-                  <Text style={[styles.queueWait, train.wait > 5 && styles.queueWaitLate]}>{train.wait}s</Text>
-                </View>
-              ))
-            )}
-            {queue.length > 2 ? <Text style={styles.moreText}>+ {queue.length - 2} meer</Text> : null}
+            <View style={styles.panelTitleRow}><Text style={styles.panelLabel}>WEST IN — WACHTRIJ</Text><Text style={styles.panelCount}>{queue.length}</Text></View>
+            {queue.length === 0 ? <Text style={styles.emptyText}>Geen trein wacht</Text> : queue.slice(0, 2).map((train, index) => (
+              <View key={train.id} style={styles.queueRow}>
+                <Text style={styles.queuePos}>{index + 1}</Text><Text style={styles.queueTrain}>{train.id}</Text><Text style={styles.queueTarget}>→ P{train.target}</Text><Text style={[styles.queueWait, train.wait > 5 && styles.queueWaitLate]}>{train.wait}s</Text>
+              </View>
+            ))}
           </View>
 
           <View style={styles.platformPanel}>
-            <View style={styles.panelTitleRow}>
-              <Text style={styles.panelLabel}>PERRONS BEZET</Text>
-              <Text style={styles.panelCount}>{occupiedCount}/3</Text>
-            </View>
+            <View style={styles.panelTitleRow}><Text style={styles.panelLabel}>PERRONS</Text><Text style={styles.panelCount}>{occupiedCount}/3</Text></View>
             <View style={styles.platformMiniRow}>
               {ROUTES.map((lane) => {
                 const train = platforms[lane];
                 return (
                   <View key={lane} style={[styles.platformMini, train && styles.platformMiniOccupied]}>
                     <Text style={styles.platformMiniLabel}>P{lane}</Text>
-                    <Text style={[styles.platformMiniStatus, train && styles.platformMiniStatusOccupied]}>
-                      {!train ? 'VRIJ' : train.status === 'ready' ? 'GEREED' : train.status === 'departing' ? 'UIT' : `${train.remaining}s`}
-                    </Text>
+                    <Text style={[styles.platformMiniStatus, train && styles.platformMiniStatusOccupied]}>{!train ? 'VRIJ' : train.status === 'ready' ? 'GEREED' : train.status === 'departing' ? 'UIT' : `${train.remaining}s`}</Text>
                   </View>
                 );
               })}
@@ -560,31 +483,18 @@ export default function App() {
           </View>
         </View>
 
-        <View style={styles.statusStrip}>
-          <View style={[styles.statusLamp, arrivalTrain || departureTrain ? styles.statusLampGreen : styles.statusLampBlue]} />
-          <Text style={styles.statusText}>{message}</Text>
-        </View>
+        <View style={styles.statusStrip}><View style={[styles.statusLamp, arrivalTrain || departureTrain ? styles.statusLampGreen : styles.statusLampBlue]} /><Text style={styles.statusText}>{message}</Text></View>
 
         <View style={styles.controlsBlock}>
-          <Text style={styles.controlsLabel}>AANKOMST — STEL RIJWEG IN VOOR {queueHead ? `${queueHead.id} → P${queueHead.target}` : 'VOLGENDE TREIN'}</Text>
+          <Text style={styles.controlsLabel}>AANKOMST — {queueHead ? `${queueHead.id} → P${queueHead.target}` : 'GEEN TREIN WACHT'}</Text>
           <View style={styles.routeRow}>
             {ROUTES.map((lane) => {
               const occupied = Boolean(platforms[lane]);
               const disabled = !queueHead || Boolean(arrivalTrain) || occupied;
               const target = queueHead?.target === lane;
               return (
-                <Pressable
-                  key={lane}
-                  disabled={disabled}
-                  style={[
-                    styles.routeButton,
-                    target && styles.routeButtonTarget,
-                    disabled && styles.routeButtonDisabled,
-                  ]}
-                  onPress={() => chooseArrivalRoute(lane)}
-                >
-                  <Text style={styles.routeButtonSmall}>{occupied ? 'BEZET' : target ? 'GEPLAND' : 'ROUTE'}</Text>
-                  <Text style={styles.routeButtonBig}>P{lane}</Text>
+                <Pressable key={lane} disabled={disabled} style={[styles.routeButton, target && styles.routeButtonTarget, disabled && styles.routeButtonDisabled]} onPress={() => chooseArrivalRoute(lane)}>
+                  <Text style={styles.routeButtonSmall}>{occupied ? 'BEZET' : target ? 'GEPLAND' : 'ROUTE'}</Text><Text style={styles.routeButtonBig}>P{lane}</Text>
                 </Pressable>
               );
             })}
@@ -594,63 +504,50 @@ export default function App() {
         <View style={styles.departureArea}>
           <Text style={styles.controlsLabel}>VERTREK — WEST UIT</Text>
           {readyLanes.length === 0 ? (
-            <View style={styles.noDeparture}>
-              <Text style={styles.noDepartureText}>{departureTrain ? `${departureTrain.id} rijdt uit` : 'Geen trein gereed voor vertrek'}</Text>
-            </View>
+            <View style={styles.noDeparture}><Text style={styles.noDepartureText}>{departureTrain ? `${departureTrain.id} rijdt uit` : 'Geen trein gereed voor vertrek'}</Text></View>
           ) : (
             <View style={styles.departureRow}>
               {readyLanes.map((lane) => (
                 <Pressable
                   key={lane}
-                  disabled={Boolean(departureTrain)}
+                  hitSlop={10}
                   style={[styles.departureButton, departureTrain && styles.routeButtonDisabled]}
                   onPress={() => dispatchDeparture(lane)}
                 >
-                  <Text style={styles.departureSmall}>{platforms[lane].id}</Text>
-                  <Text style={styles.departureBig}>P{lane} → WEST</Text>
+                  <Text style={styles.departureSmall}>{platforms[lane]?.id}</Text>
+                  <Text style={styles.departureBig}>P{lane} → WEST UIT</Text>
                 </Pressable>
               ))}
             </View>
           )}
         </View>
-      </View>
+      </ScrollView>
 
-      <View style={styles.footer}>
-        <Text style={styles.footerText}>COINS {coins}  •  W1/S1 WEST IN  •  W2/S2 WEST UIT  •  D1–D3</Text>
-      </View>
+      <View style={styles.footer}><Text style={styles.footerText}>COINS {coins} • W1/S1 WEST IN • W2/S2 WEST UIT • D1–D3</Text></View>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: '#070d12' },
-  content: { flex: 1, paddingHorizontal: 11 },
+  scroll: { flex: 1 },
+  content: { paddingHorizontal: 11, paddingBottom: 24 },
   menuWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 26 },
-  brandPlate: { width: '100%', maxWidth: 420, alignItems: 'center', marginBottom: 28 },
   kicker: { color: '#79a8c7', fontSize: 10, fontWeight: '900', letterSpacing: 2.1, marginBottom: 12, textAlign: 'center' },
   title: { color: '#edf4f7', fontSize: 47, lineHeight: 45, fontWeight: '900', letterSpacing: -2, textAlign: 'center' },
-  subtitle: { color: '#93a3ae', fontSize: 16, lineHeight: 23, textAlign: 'center', marginTop: 18, maxWidth: 360 },
-  menuTrack: { width: 220, height: 42, marginTop: 17, position: 'relative' },
-  menuTrackLine: { position: 'absolute', left: 0, width: '100%', height: 4, backgroundColor: '#72808a' },
-  menuSignal: { position: 'absolute', width: 12, height: 12, borderRadius: 6, right: 8 },
-  menuSignalGreen: { top: 6, backgroundColor: '#38e27d' },
-  menuSignalRed: { top: 23, backgroundColor: '#ff4d5f' },
+  subtitle: { color: '#93a3ae', fontSize: 16, lineHeight: 23, textAlign: 'center', marginTop: 18, marginBottom: 28, maxWidth: 360 },
   primaryButton: { backgroundColor: '#ffd65a', minWidth: 230, paddingVertical: 16, paddingHorizontal: 24, alignItems: 'center', borderRadius: 9, borderWidth: 2, borderColor: '#ffe795' },
   primaryButtonText: { color: '#111820', fontWeight: '900', fontSize: 16, letterSpacing: 1.2 },
   secondaryButton: { paddingVertical: 13, paddingHorizontal: 24, marginTop: 7 },
   secondaryButtonText: { color: '#7f919d', fontWeight: '800', fontSize: 12, letterSpacing: 1 },
-  tip: { color: '#53636f', fontSize: 11, fontWeight: '700', marginTop: 18 },
-  gameOverTitle: { color: '#ff5968', fontSize: 42, fontWeight: '900', letterSpacing: -1, marginBottom: 20 },
+  gameOverTitle: { color: '#ff5968', fontSize: 42, fontWeight: '900', marginBottom: 20 },
   resultCard: { width: 270, alignItems: 'center', backgroundColor: '#0d151c', borderWidth: 1, borderColor: '#26343d', borderRadius: 10, paddingVertical: 18, marginBottom: 22 },
   resultLabel: { color: '#6f818d', fontSize: 9, fontWeight: '900', letterSpacing: 2 },
   resultScore: { color: '#edf4f7', fontSize: 38, fontWeight: '900', marginVertical: 3 },
-  resultDivider: { width: 110, height: 1, backgroundColor: '#25333c', marginVertical: 9 },
-  resultCoins: { color: '#ffd65a', fontSize: 11, fontWeight: '900', letterSpacing: 0.6 },
+  resultCoins: { color: '#ffd65a', fontSize: 11, fontWeight: '900' },
 
   hud: { flexDirection: 'row', paddingHorizontal: 15, paddingTop: 10, paddingBottom: 8, borderBottomWidth: 1, borderBottomColor: '#16232c' },
-  hudCell: { flex: 1 },
-  hudCenter: { alignItems: 'center' },
-  hudRight: { alignItems: 'flex-end' },
+  hudCell: { flex: 1 }, hudCenter: { alignItems: 'center' }, hudRight: { alignItems: 'flex-end' },
   hudLabel: { color: '#5e707c', fontSize: 7.5, fontWeight: '900', letterSpacing: 1.2 },
   hudValue: { color: '#dfe9ee', fontSize: 16, fontWeight: '900', marginTop: 2 },
   lifeText: { color: '#ff5c68', fontSize: 15, fontWeight: '900', marginTop: 2, letterSpacing: 1.5 },
@@ -658,7 +555,7 @@ const styles = StyleSheet.create({
   tableauFrame: { marginTop: 9, backgroundColor: '#0a1218', borderWidth: 1, borderColor: '#263741', borderRadius: 11, overflow: 'hidden' },
   tableauHeader: { minHeight: 39, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 10, borderBottomWidth: 1, borderBottomColor: '#263741' },
   tableauTitle: { color: '#9eb0bb', fontSize: 7.8, fontWeight: '900', letterSpacing: 0.8 },
-  tableauStatus: { color: '#ffd65a', fontSize: 7.2, fontWeight: '900', letterSpacing: 0.7 },
+  tableauStatus: { color: '#ffd65a', fontSize: 7.2, fontWeight: '900' },
   svgArea: { height: 245, position: 'relative', overflow: 'hidden' },
   trainBlock: { width: 58, minHeight: 28, borderRadius: 4, backgroundColor: '#d9edf8', borderWidth: 2, borderColor: '#081016', paddingHorizontal: 3, paddingVertical: 2, alignItems: 'center', justifyContent: 'center' },
   movingTrain: { position: 'absolute', left: 0, top: 0 },
@@ -666,54 +563,38 @@ const styles = StyleSheet.create({
   trainBlockDest: { color: '#31566c', fontSize: 7, fontWeight: '900', marginTop: 1 },
   legendRow: { minHeight: 31, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 12, borderTopWidth: 1, borderTopColor: '#1d2a33' },
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  legendDot: { width: 7, height: 7, borderRadius: 4 },
-  legendLine: { width: 14, height: 3, borderRadius: 2 },
-  legendText: { color: '#657783', fontSize: 6.5, fontWeight: '900', letterSpacing: 0.6 },
+  legendDot: { width: 7, height: 7, borderRadius: 4 }, legendLine: { width: 14, height: 3, borderRadius: 2 },
+  legendText: { color: '#657783', fontSize: 6.5, fontWeight: '900' },
 
   infoGrid: { flexDirection: 'row', gap: 8, marginTop: 8 },
   queuePanel: { flex: 1.18, minHeight: 83, backgroundColor: '#0d161d', borderWidth: 1, borderColor: '#263640', borderRadius: 8, padding: 8 },
   platformPanel: { flex: 0.82, minHeight: 83, backgroundColor: '#0d161d', borderWidth: 1, borderColor: '#263640', borderRadius: 8, padding: 8 },
   panelTitleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 },
-  panelLabel: { color: '#647986', fontSize: 6.8, fontWeight: '900', letterSpacing: 0.9 },
-  panelCount: { color: '#dce7ec', fontSize: 10, fontWeight: '900' },
+  panelLabel: { color: '#647986', fontSize: 6.8, fontWeight: '900' }, panelCount: { color: '#dce7ec', fontSize: 10, fontWeight: '900' },
   emptyText: { color: '#52636e', fontSize: 9, fontWeight: '700', paddingTop: 9 },
   queueRow: { flexDirection: 'row', alignItems: 'center', minHeight: 23, borderTopWidth: 1, borderTopColor: '#17242d' },
-  queuePos: { width: 18, color: '#5e717d', fontSize: 8, fontWeight: '900' },
-  queueTrain: { flex: 1, color: '#dce7ec', fontSize: 9, fontWeight: '900' },
-  queueTarget: { color: '#58b9ff', fontSize: 8, fontWeight: '900', marginRight: 7 },
-  queueWait: { color: '#7f919c', fontSize: 8, fontWeight: '900' },
-  queueWaitLate: { color: '#ff7182' },
-  moreText: { color: '#657783', fontSize: 7.5, fontWeight: '800', marginTop: 3 },
+  queuePos: { width: 18, color: '#5e717d', fontSize: 8, fontWeight: '900' }, queueTrain: { flex: 1, color: '#dce7ec', fontSize: 9, fontWeight: '900' },
+  queueTarget: { color: '#58b9ff', fontSize: 8, fontWeight: '900', marginRight: 7 }, queueWait: { color: '#7f919c', fontSize: 8, fontWeight: '900' }, queueWaitLate: { color: '#ff7182' },
   platformMiniRow: { flexDirection: 'row', gap: 4, paddingTop: 7 },
   platformMini: { flex: 1, minHeight: 39, alignItems: 'center', justifyContent: 'center', backgroundColor: '#0a1218', borderWidth: 1, borderColor: '#253640', borderRadius: 5 },
   platformMiniOccupied: { backgroundColor: '#23151a', borderColor: '#5b2d38' },
-  platformMiniLabel: { color: '#899ba6', fontSize: 8, fontWeight: '900' },
-  platformMiniStatus: { color: '#527065', fontSize: 6.5, fontWeight: '900', marginTop: 3 },
-  platformMiniStatusOccupied: { color: '#ff7182' },
+  platformMiniLabel: { color: '#899ba6', fontSize: 8, fontWeight: '900' }, platformMiniStatus: { color: '#527065', fontSize: 6.5, fontWeight: '900', marginTop: 3 }, platformMiniStatusOccupied: { color: '#ff7182' },
 
   statusStrip: { minHeight: 35, flexDirection: 'row', alignItems: 'center', marginTop: 8, paddingHorizontal: 10, paddingVertical: 6, backgroundColor: '#091117', borderWidth: 1, borderColor: '#1d2b34', borderRadius: 7 },
-  statusLamp: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#72808a', marginRight: 8 },
-  statusLampBlue: { backgroundColor: '#58b9ff' },
-  statusLampGreen: { backgroundColor: '#38e27d' },
+  statusLamp: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#72808a', marginRight: 8 }, statusLampBlue: { backgroundColor: '#58b9ff' }, statusLampGreen: { backgroundColor: '#38e27d' },
   statusText: { flex: 1, color: '#9babb5', fontSize: 9, lineHeight: 12, fontWeight: '700' },
 
-  controlsBlock: { marginTop: 9 },
-  controlsLabel: { color: '#60727e', fontSize: 7, fontWeight: '900', letterSpacing: 1, marginBottom: 6, textAlign: 'center' },
+  controlsBlock: { marginTop: 9 }, controlsLabel: { color: '#60727e', fontSize: 7, fontWeight: '900', letterSpacing: 1, marginBottom: 6, textAlign: 'center' },
   routeRow: { flexDirection: 'row', width: '100%', gap: 6 },
   routeButton: { flex: 1, minHeight: 55, alignItems: 'center', justifyContent: 'center', backgroundColor: '#111c23', borderWidth: 1, borderColor: '#40505a', borderRadius: 7 },
-  routeButtonTarget: { borderColor: '#58b9ff', backgroundColor: '#10202a' },
-  routeButtonDisabled: { opacity: 0.34 },
-  routeButtonSmall: { color: '#748691', fontSize: 6.5, fontWeight: '900', letterSpacing: 1 },
-  routeButtonBig: { color: '#e7eff3', fontSize: 19, fontWeight: '900', marginTop: 2 },
+  routeButtonTarget: { borderColor: '#58b9ff', backgroundColor: '#10202a' }, routeButtonDisabled: { opacity: 0.34 },
+  routeButtonSmall: { color: '#748691', fontSize: 6.5, fontWeight: '900', letterSpacing: 1 }, routeButtonBig: { color: '#e7eff3', fontSize: 19, fontWeight: '900', marginTop: 2 },
 
-  departureArea: { marginTop: 8, paddingBottom: 5 },
-  departureRow: { flexDirection: 'row', gap: 6 },
-  departureButton: { flex: 1, minHeight: 48, alignItems: 'center', justifyContent: 'center', backgroundColor: '#2a2410', borderWidth: 1.5, borderColor: '#ffd65a', borderRadius: 7 },
-  departureSmall: { color: '#ad973a', fontSize: 6.5, fontWeight: '900', letterSpacing: 0.7 },
-  departureBig: { color: '#ffe278', fontSize: 12, fontWeight: '900', marginTop: 2 },
-  noDeparture: { minHeight: 38, alignItems: 'center', justifyContent: 'center', backgroundColor: '#0a1218', borderWidth: 1, borderColor: '#1e2d36', borderRadius: 7 },
+  departureArea: { marginTop: 12, paddingBottom: 10 }, departureRow: { flexDirection: 'row', gap: 6 },
+  departureButton: { flex: 1, minHeight: 56, alignItems: 'center', justifyContent: 'center', backgroundColor: '#2a2410', borderWidth: 2, borderColor: '#ffd65a', borderRadius: 8 },
+  departureSmall: { color: '#ad973a', fontSize: 7, fontWeight: '900' }, departureBig: { color: '#ffe278', fontSize: 12, fontWeight: '900', marginTop: 2 },
+  noDeparture: { minHeight: 42, alignItems: 'center', justifyContent: 'center', backgroundColor: '#0a1218', borderWidth: 1, borderColor: '#1e2d36', borderRadius: 7 },
   noDepartureText: { color: '#52636e', fontSize: 8, fontWeight: '800' },
 
-  footer: { alignItems: 'center', paddingVertical: 7, borderTopWidth: 1, borderTopColor: '#14212a' },
-  footerText: { color: '#42535e', fontSize: 7, fontWeight: '900', letterSpacing: 0.7 },
+  footer: { alignItems: 'center', paddingVertical: 7, borderTopWidth: 1, borderTopColor: '#14212a' }, footerText: { color: '#42535e', fontSize: 7, fontWeight: '900' },
 });
