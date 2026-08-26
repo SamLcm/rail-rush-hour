@@ -16,7 +16,10 @@ const TRACK_Y = { 1: 55, 2: 140, 3: 225 };
 const WEST_IN_Y = 95;
 const WEST_OUT_Y = 185;
 const DWELL_SECONDS = 8;
-const SPAWN_MS = 6500;
+const SPAWN_MS = 7200;
+const ARRIVAL_BASE_MS = 4200;
+const ARRIVAL_MIN_MS = 3200;
+const DEPARTURE_MS = 3600;
 const MOTION_RANGE = [0, 0.16, 0.32, 0.5, 0.68, 0.84, 1];
 
 const SEGMENTS = {
@@ -340,7 +343,7 @@ export default function App() {
     const clock = setInterval(() => {
       replaceQueue((current) => {
         const updated = current.map((train) => ({ ...train, wait: train.wait + 1 }));
-        const delayed = updated.filter((train) => train.wait > 5).length;
+        const delayed = updated.filter((train) => train.wait > 7).length;
         if (delayed) setTotalDelay((value) => value + delayed);
         return updated;
       });
@@ -408,7 +411,7 @@ export default function App() {
 
     const animation = Animated.timing(arrivalProgress, {
       toValue: 1,
-      duration: Math.max(1400, 2600 - Math.floor(scoreRef.current / 70) * 90),
+      duration: Math.max(ARRIVAL_MIN_MS, ARRIVAL_BASE_MS - Math.floor(scoreRef.current / 120) * 80),
       useNativeDriver: true,
     });
     arrivalAnimation.current = animation;
@@ -465,7 +468,7 @@ export default function App() {
 
     const animation = Animated.timing(departureProgress, {
       toValue: 1,
-      duration: 2200,
+      duration: DEPARTURE_MS,
       useNativeDriver: true,
     });
     departureAnimation.current = animation;
@@ -524,9 +527,9 @@ export default function App() {
       <SafeAreaView style={styles.screen}>
         <StatusBar barStyle="light-content" />
         <View style={styles.menuWrap}>
-          <Text style={styles.kicker}>INTERLOCKING DISPATCHER / V0.5</Text>
+          <Text style={styles.kicker}>INTERLOCKING DISPATCHER / V0.5.1</Text>
           <Text style={styles.title}>RAIL{`\n`}RUSH HOUR</Text>
-          <Text style={styles.subtitle}>Bedien een echte wisselstraat met gewone wissels, een Engels wissel en kruisende rijwegen. Niet-conflicterende rijwegen mogen tegelijk.</Text>
+          <Text style={styles.subtitle}>Bedien de wisselstraat, combineer niet-conflicterende rijwegen en houd overzicht wanneer het station voller wordt.</Text>
           <Pressable style={styles.primaryButton} onPress={startGame}><Text style={styles.primaryButtonText}>START DIENST</Text></Pressable>
         </View>
       </SafeAreaView>
@@ -585,7 +588,10 @@ export default function App() {
             <View style={styles.panelTitleRow}><Text style={styles.panelLabel}>WEST IN — WACHTRIJ</Text><Text style={styles.panelCount}>{queue.length}</Text></View>
             {queue.length === 0 ? <Text style={styles.emptyText}>Geen trein wacht</Text> : queue.slice(0, 2).map((train, index) => (
               <View key={train.id} style={styles.queueRow}>
-                <Text style={styles.queuePos}>{index + 1}</Text><Text style={styles.queueTrain}>{train.id}</Text><Text style={styles.queueTarget}>→ P{train.target}</Text><Text style={[styles.queueWait, train.wait > 5 && styles.queueWaitLate]}>{train.wait}s</Text>
+                <Text style={styles.queuePos}>{index + 1}</Text>
+                <Text style={styles.queueTrain}>{train.id}</Text>
+                <Text style={styles.queueTarget}>→ P{train.target}</Text>
+                <Text style={[styles.queueWait, train.wait > 7 && styles.queueWaitLate]}>{train.wait}s</Text>
               </View>
             ))}
           </View>
@@ -598,7 +604,9 @@ export default function App() {
                 return (
                   <View key={lane} style={[styles.platformMini, train && styles.platformMiniOccupied]}>
                     <Text style={styles.platformMiniLabel}>P{lane}</Text>
-                    <Text style={[styles.platformMiniStatus, train && styles.platformMiniStatusOccupied]}>{!train ? 'VRIJ' : train.status === 'ready' ? 'GEREED' : train.status === 'departing' ? 'UIT' : `${train.remaining}s`}</Text>
+                    <Text style={[styles.platformMiniStatus, train && styles.platformMiniStatusOccupied]}>
+                      {!train ? 'VRIJ' : train.status === 'ready' ? 'GEREED' : train.status === 'departing' ? 'UIT' : `${train.remaining}s`}
+                    </Text>
                   </View>
                 );
               })}
@@ -606,7 +614,10 @@ export default function App() {
           </View>
         </View>
 
-        <View style={styles.statusStrip}><View style={[styles.statusLamp, arrivalTrain || departureTrain ? styles.statusLampGreen : styles.statusLampBlue]} /><Text style={styles.statusText}>{message}</Text></View>
+        <View style={styles.statusStrip}>
+          <View style={[styles.statusLamp, arrivalTrain || departureTrain ? styles.statusLampGreen : styles.statusLampBlue]} />
+          <Text style={styles.statusText}>{message}</Text>
+        </View>
 
         <View style={styles.controlsBlock}>
           <Text style={styles.controlsLabel}>AANKOMST — {queueHead ? `${queueHead.id} → P${queueHead.target}` : 'GEEN TREIN WACHT'}</Text>
@@ -656,7 +667,9 @@ export default function App() {
         </View>
       </ScrollView>
 
-      <View style={styles.footer}><Text style={styles.footerText}>W1–W5 • EW1 ENGELS WISSEL • K1 KRUISING • NIET-CONFLICTERENDE RIJWEGEN PARALLEL</Text></View>
+      <View style={styles.footer}>
+        <Text style={styles.footerText}>W1–W5 • EW1 ENGELS WISSEL • K1 KRUISING • NIET-CONFLICTERENDE RIJWEGEN PARALLEL</Text>
+      </View>
     </SafeAreaView>
   );
 }
@@ -680,7 +693,9 @@ const styles = StyleSheet.create({
   resultCoins: { color: '#ffd65a', fontSize: 11, fontWeight: '900' },
 
   hud: { flexDirection: 'row', paddingHorizontal: 15, paddingTop: 10, paddingBottom: 8, borderBottomWidth: 1, borderBottomColor: '#16232c' },
-  hudCell: { flex: 1 }, hudCenter: { alignItems: 'center' }, hudRight: { alignItems: 'flex-end' },
+  hudCell: { flex: 1 },
+  hudCenter: { alignItems: 'center' },
+  hudRight: { alignItems: 'flex-end' },
   hudLabel: { color: '#5e707c', fontSize: 7.5, fontWeight: '900', letterSpacing: 1.2 },
   hudValue: { color: '#dfe9ee', fontSize: 16, fontWeight: '900', marginTop: 2 },
   lifeText: { color: '#ff5c68', fontSize: 15, fontWeight: '900', marginTop: 2, letterSpacing: 1.5 },
@@ -703,34 +718,47 @@ const styles = StyleSheet.create({
   queuePanel: { flex: 1.18, minHeight: 83, backgroundColor: '#0d161d', borderWidth: 1, borderColor: '#263640', borderRadius: 8, padding: 8 },
   platformPanel: { flex: 0.82, minHeight: 83, backgroundColor: '#0d161d', borderWidth: 1, borderColor: '#263640', borderRadius: 8, padding: 8 },
   panelTitleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 },
-  panelLabel: { color: '#647986', fontSize: 6.8, fontWeight: '900' }, panelCount: { color: '#dce7ec', fontSize: 10, fontWeight: '900' },
+  panelLabel: { color: '#647986', fontSize: 6.8, fontWeight: '900' },
+  panelCount: { color: '#dce7ec', fontSize: 10, fontWeight: '900' },
   emptyText: { color: '#52636e', fontSize: 9, fontWeight: '700', paddingTop: 9 },
   queueRow: { flexDirection: 'row', alignItems: 'center', minHeight: 23, borderTopWidth: 1, borderTopColor: '#17242d' },
-  queuePos: { width: 18, color: '#5e717d', fontSize: 8, fontWeight: '900' }, queueTrain: { flex: 1, color: '#dce7ec', fontSize: 9, fontWeight: '900' },
-  queueTarget: { color: '#58b9ff', fontSize: 8, fontWeight: '900', marginRight: 7 }, queueWait: { color: '#7f919c', fontSize: 8, fontWeight: '900' }, queueWaitLate: { color: '#ff7182' },
+  queuePos: { width: 18, color: '#5e717d', fontSize: 8, fontWeight: '900' },
+  queueTrain: { flex: 1, color: '#dce7ec', fontSize: 9, fontWeight: '900' },
+  queueTarget: { color: '#58b9ff', fontSize: 8, fontWeight: '900', marginRight: 7 },
+  queueWait: { color: '#7f919c', fontSize: 8, fontWeight: '900' },
+  queueWaitLate: { color: '#ff7182' },
   platformMiniRow: { flexDirection: 'row', gap: 4, paddingTop: 7 },
   platformMini: { flex: 1, minHeight: 39, alignItems: 'center', justifyContent: 'center', backgroundColor: '#0a1218', borderWidth: 1, borderColor: '#253640', borderRadius: 5 },
   platformMiniOccupied: { backgroundColor: '#23151a', borderColor: '#5b2d38' },
-  platformMiniLabel: { color: '#899ba6', fontSize: 8, fontWeight: '900' }, platformMiniStatus: { color: '#527065', fontSize: 6.5, fontWeight: '900', marginTop: 3 }, platformMiniStatusOccupied: { color: '#ff7182' },
+  platformMiniLabel: { color: '#899ba6', fontSize: 8, fontWeight: '900' },
+  platformMiniStatus: { color: '#527065', fontSize: 6.5, fontWeight: '900', marginTop: 3 },
+  platformMiniStatusOccupied: { color: '#ff7182' },
 
   statusStrip: { minHeight: 35, flexDirection: 'row', alignItems: 'center', marginTop: 8, paddingHorizontal: 10, paddingVertical: 6, backgroundColor: '#091117', borderWidth: 1, borderColor: '#1d2b34', borderRadius: 7 },
-  statusLamp: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#72808a', marginRight: 8 }, statusLampBlue: { backgroundColor: '#58b9ff' }, statusLampGreen: { backgroundColor: '#38e27d' },
+  statusLamp: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#72808a', marginRight: 8 },
+  statusLampBlue: { backgroundColor: '#58b9ff' },
+  statusLampGreen: { backgroundColor: '#38e27d' },
   statusText: { flex: 1, color: '#9babb5', fontSize: 9, lineHeight: 12, fontWeight: '700' },
 
-  controlsBlock: { marginTop: 9 }, controlsLabel: { color: '#60727e', fontSize: 7, fontWeight: '900', letterSpacing: 1, marginBottom: 6, textAlign: 'center' },
+  controlsBlock: { marginTop: 9 },
+  controlsLabel: { color: '#60727e', fontSize: 7, fontWeight: '900', letterSpacing: 1, marginBottom: 6, textAlign: 'center' },
   routeRow: { flexDirection: 'row', width: '100%', gap: 6 },
   routeButton: { flex: 1, minHeight: 55, alignItems: 'center', justifyContent: 'center', backgroundColor: '#111c23', borderWidth: 1, borderColor: '#40505a', borderRadius: 7 },
   routeButtonTarget: { borderColor: '#58b9ff', backgroundColor: '#10202a' },
   routeButtonConflict: { borderColor: '#ff5968', backgroundColor: '#24161a' },
   routeButtonDisabled: { opacity: 0.34 },
-  routeButtonSmall: { color: '#748691', fontSize: 6.5, fontWeight: '900', letterSpacing: 1 }, routeButtonBig: { color: '#e7eff3', fontSize: 19, fontWeight: '900', marginTop: 2 },
+  routeButtonSmall: { color: '#748691', fontSize: 6.5, fontWeight: '900', letterSpacing: 1 },
+  routeButtonBig: { color: '#e7eff3', fontSize: 19, fontWeight: '900', marginTop: 2 },
 
-  departureArea: { marginTop: 12, paddingBottom: 10 }, departureRow: { flexDirection: 'row', gap: 6 },
+  departureArea: { marginTop: 12, paddingBottom: 10 },
+  departureRow: { flexDirection: 'row', gap: 6 },
   departureButton: { flex: 1, minHeight: 56, alignItems: 'center', justifyContent: 'center', backgroundColor: '#10212a', borderWidth: 2, borderColor: '#66d8ff', borderRadius: 8 },
   departureButtonConflict: { backgroundColor: '#24161a', borderColor: '#ff5968' },
-  departureSmall: { color: '#80b6ca', fontSize: 7, fontWeight: '900' }, departureBig: { color: '#9be7ff', fontSize: 12, fontWeight: '900', marginTop: 2 },
+  departureSmall: { color: '#80b6ca', fontSize: 7, fontWeight: '900' },
+  departureBig: { color: '#9be7ff', fontSize: 12, fontWeight: '900', marginTop: 2 },
   noDeparture: { minHeight: 42, alignItems: 'center', justifyContent: 'center', backgroundColor: '#0a1218', borderWidth: 1, borderColor: '#1e2d36', borderRadius: 7 },
   noDepartureText: { color: '#52636e', fontSize: 8, fontWeight: '800' },
 
-  footer: { alignItems: 'center', paddingVertical: 7, paddingHorizontal: 8, borderTopWidth: 1, borderTopColor: '#14212a' }, footerText: { color: '#42535e', fontSize: 6.5, fontWeight: '900', textAlign: 'center' },
+  footer: { alignItems: 'center', paddingVertical: 7, paddingHorizontal: 8, borderTopWidth: 1, borderTopColor: '#14212a' },
+  footerText: { color: '#42535e', fontSize: 6.5, fontWeight: '900', textAlign: 'center' },
 });
