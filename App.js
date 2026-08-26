@@ -9,31 +9,94 @@ import {
   Text,
   View,
 } from 'react-native';
-import Svg, { Circle, Line, Path, Rect, Text as SvgText } from 'react-native-svg';
+import Svg, { Circle, Path, Rect, Text as SvgText } from 'react-native-svg';
 
 const ROUTES = [1, 2, 3];
-const TRACK_Y = { 1: 55, 2: 130, 3: 205 };
-const WEST_IN_Y = 100;
-const WEST_OUT_Y = 160;
+const TRACK_Y = { 1: 55, 2: 140, 3: 225 };
+const WEST_IN_Y = 95;
+const WEST_OUT_Y = 185;
 const DWELL_SECONDS = 8;
 const SPAWN_MS = 6500;
+const MOTION_RANGE = [0, 0.16, 0.32, 0.5, 0.68, 0.84, 1];
 
-const arrivalPath = (lane) => {
-  if (lane === 1) return 'M 18 100 H 105 L 205 55 H 315';
-  if (lane === 2) return 'M 18 100 H 105 L 175 130 H 315';
-  return 'M 18 100 H 105 L 205 205 H 315';
+const SEGMENTS = {
+  IN: 'M 15 95 H 85',
+  WIN: 'M 85 95 L 110 110',
+  U0: 'M 110 110 H 135',
+  EW_U: 'M 135 110 H 175',
+  EW_L: 'M 135 170 H 175',
+  EW_X1: 'M 135 110 L 175 170',
+  EW_X2: 'M 135 170 L 175 110',
+  U1: 'M 175 110 H 195',
+  L1: 'M 175 170 H 195',
+  K_U: 'M 195 110 H 235',
+  K_L: 'M 195 170 H 235',
+  K_X1: 'M 195 110 L 235 170',
+  K_X2: 'M 195 170 L 235 110',
+  P1: 'M 235 110 L 260 55 H 335',
+  P2U: 'M 235 110 L 260 140',
+  P2L: 'M 235 170 L 260 140',
+  P2: 'M 260 140 H 335',
+  P3: 'M 235 170 L 260 225 H 335',
+  L0: 'M 110 170 H 135',
+  WOUT: 'M 85 185 L 110 170',
+  OUT: 'M 15 185 H 85',
 };
 
-const departurePath = (lane) => {
-  if (lane === 1) return 'M 315 55 H 220 L 110 160 H 18';
-  if (lane === 2) return 'M 315 130 H 185 L 110 160 H 18';
-  return 'M 315 205 H 220 L 110 160 H 18';
+const ARRIVAL_ROUTES = {
+  1: {
+    name: 'WEST IN → P1',
+    segments: ['IN', 'WIN', 'U0', 'EW_U', 'U1', 'K_U', 'P1'],
+    locks: ['IN', 'EW_TOP', 'K_TOP', 'P1'],
+  },
+  2: {
+    name: 'WEST IN → P2',
+    segments: ['IN', 'WIN', 'U0', 'EW_U', 'U1', 'K_U', 'P2U', 'P2'],
+    locks: ['IN', 'EW_TOP', 'K_TOP', 'P2'],
+  },
+  3: {
+    name: 'WEST IN → P3',
+    segments: ['IN', 'WIN', 'U0', 'EW_X1', 'L1', 'K_L', 'P3'],
+    locks: ['IN', 'EW_TOP', 'EW_BOTTOM', 'K_BOTTOM', 'P3'],
+  },
 };
+
+const DEPARTURE_ROUTES = {
+  1: {
+    name: 'P1 → WEST UIT',
+    segments: ['P1', 'K_X2', 'L1', 'EW_L', 'L0', 'WOUT', 'OUT'],
+    locks: ['P1', 'K_TOP', 'K_BOTTOM', 'EW_BOTTOM', 'OUT'],
+  },
+  2: {
+    name: 'P2 → WEST UIT',
+    segments: ['P2', 'P2L', 'K_L', 'L1', 'EW_L', 'L0', 'WOUT', 'OUT'],
+    locks: ['P2', 'K_BOTTOM', 'EW_BOTTOM', 'OUT'],
+  },
+  3: {
+    name: 'P3 → WEST UIT',
+    segments: ['P3', 'K_L', 'L1', 'EW_L', 'L0', 'WOUT', 'OUT'],
+    locks: ['P3', 'K_BOTTOM', 'EW_BOTTOM', 'OUT'],
+  },
+};
+
+const ARRIVAL_POINTS = {
+  1: [[15, 95], [85, 95], [110, 110], [175, 110], [235, 110], [260, 55], [305, 55]],
+  2: [[15, 95], [85, 95], [110, 110], [175, 110], [235, 110], [260, 140], [305, 140]],
+  3: [[15, 95], [85, 95], [110, 110], [175, 170], [235, 170], [260, 225], [305, 225]],
+};
+
+const DEPARTURE_POINTS = {
+  1: [[305, 55], [260, 55], [235, 110], [195, 170], [135, 170], [85, 185], [15, 185]],
+  2: [[305, 140], [260, 140], [235, 170], [195, 170], [135, 170], [85, 185], [15, 185]],
+  3: [[305, 225], [260, 225], [235, 170], [195, 170], [135, 170], [85, 185], [15, 185]],
+};
+
+const routesConflict = (a, b) => Boolean(a && b && a.locks.some((lock) => b.locks.includes(lock)));
 
 function Signal({ x, y, green = false, label }) {
   return (
     <>
-      <Line x1={x} y1={y + 9} x2={x} y2={y + 24} stroke="#74808b" strokeWidth="3" />
+      <Path d={`M ${x} ${y + 9} V ${y + 24}`} stroke="#74808b" strokeWidth="3" />
       <Rect x={x - 8} y={y - 11} width="16" height="22" rx="5" fill="#101820" stroke="#697580" strokeWidth="2" />
       <Circle cx={x} cy={y - 4} r="4.7" fill={green ? '#38e27d' : '#ff4d5f'} />
       <Circle cx={x} cy={y + 5} r="2.7" fill="#26313b" />
@@ -51,6 +114,34 @@ function TrainBlock({ id, detail, style }) {
   );
 }
 
+function movementPosition(progress, points, scaleX, scaleY) {
+  return {
+    x: progress.interpolate({
+      inputRange: MOTION_RANGE,
+      outputRange: points.map(([x]) => x * scaleX - 29),
+    }),
+    y: progress.interpolate({
+      inputRange: MOTION_RANGE,
+      outputRange: points.map(([, y]) => y * scaleY - 14),
+    }),
+  };
+}
+
+function RouteHighlight({ route, color }) {
+  if (!route) return null;
+  return route.segments.map((segmentId) => (
+    <Path
+      key={`${color}-${segmentId}`}
+      d={SEGMENTS[segmentId]}
+      fill="none"
+      stroke={color}
+      strokeWidth="7"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  ));
+}
+
 function DispatcherTableau({
   boardSize,
   onLayout,
@@ -63,89 +154,88 @@ function DispatcherTableau({
   departureProgress,
   queueHead,
 }) {
-  const scaleX = boardSize.width / 360 || 1;
-  const scaleY = boardSize.height / 260 || 1;
+  const scaleX = boardSize.width / 380 || 1;
+  const scaleY = boardSize.height / 280 || 1;
+  const arrivalRoute = arrivalLane ? ARRIVAL_ROUTES[arrivalLane] : null;
+  const departureRoute = departureLane ? DEPARTURE_ROUTES[departureLane] : null;
+  const arrivalPos = movementPosition(arrivalProgress, ARRIVAL_POINTS[arrivalLane || 1], scaleX, scaleY);
+  const departurePos = movementPosition(departureProgress, DEPARTURE_POINTS[departureLane || 1], scaleX, scaleY);
+  const activeCount = Number(Boolean(arrivalTrain)) + Number(Boolean(departureTrain));
 
-  const arrivalX = arrivalProgress.interpolate({
-    inputRange: [0, 0.34, 0.68, 1],
-    outputRange: [18 * scaleX - 25, 105 * scaleX - 25, 205 * scaleX - 25, 274 * scaleX - 25],
-  });
-  const arrivalY = arrivalProgress.interpolate({
-    inputRange: [0, 0.34, 0.68, 1],
-    outputRange: [
-      WEST_IN_Y * scaleY - 14,
-      WEST_IN_Y * scaleY - 14,
-      (arrivalLane ? TRACK_Y[arrivalLane] : WEST_IN_Y) * scaleY - 14,
-      (arrivalLane ? TRACK_Y[arrivalLane] : WEST_IN_Y) * scaleY - 14,
-    ],
-  });
-
-  const departureX = departureProgress.interpolate({
-    inputRange: [0, 0.34, 0.7, 1],
-    outputRange: [274 * scaleX - 25, 220 * scaleX - 25, 110 * scaleX - 25, 18 * scaleX - 25],
-  });
-  const departureY = departureProgress.interpolate({
-    inputRange: [0, 0.34, 0.7, 1],
-    outputRange: [
-      (departureLane ? TRACK_Y[departureLane] : WEST_OUT_Y) * scaleY - 14,
-      (departureLane ? TRACK_Y[departureLane] : WEST_OUT_Y) * scaleY - 14,
-      WEST_OUT_Y * scaleY - 14,
-      WEST_OUT_Y * scaleY - 14,
-    ],
-  });
-
-  let status = 'POST ACTIEF';
-  if (arrivalTrain && departureTrain) status = 'AANKOMST + VERTREK';
-  else if (arrivalTrain) status = 'AANKOMST IN BEWEGING';
-  else if (departureTrain) status = 'VERTREK IN BEWEGING';
-  else if (queueHead) status = 'TREIN WACHT OP RIJWEG';
+  let status = 'INTERLOCKING VRIJ';
+  if (activeCount === 2) status = '2 RIJWEGEN ACTIEF';
+  else if (arrivalTrain) status = 'AANKOMSTRIJWEG ACTIEF';
+  else if (departureTrain) status = 'UITRIJWEG ACTIEF';
+  else if (queueHead) status = 'TREIN WACHT';
 
   return (
     <View style={styles.tableauFrame}>
       <View style={styles.tableauHeader}>
-        <Text style={styles.tableauTitle}>POST RAIL RUSH — DUBBELSPORIGE AANSLUITING</Text>
+        <Text style={styles.tableauTitle}>POST RAIL RUSH — WISSELSTRAAT / INTERLOCKING</Text>
         <Text style={styles.tableauStatus}>{status}</Text>
       </View>
 
       <View style={styles.svgArea} onLayout={(event) => onLayout(event.nativeEvent.layout)}>
-        <Svg width="100%" height="100%" viewBox="0 0 360 260">
-          <Rect x="1" y="1" width="358" height="258" rx="10" fill="#081016" stroke="#26343f" strokeWidth="2" />
-          <Line x1="18" y1={WEST_IN_Y} x2="105" y2={WEST_IN_Y} stroke="#56636d" strokeWidth="5" strokeLinecap="round" />
-          <Line x1="18" y1={WEST_OUT_Y} x2="110" y2={WEST_OUT_Y} stroke="#56636d" strokeWidth="5" strokeLinecap="round" />
+        <Svg width="100%" height="100%" viewBox="0 0 380 280">
+          <Rect x="1" y="1" width="378" height="278" rx="10" fill="#081016" stroke="#26343f" strokeWidth="2" />
 
-          {ROUTES.map((lane) => (
-            <React.Fragment key={`base-${lane}`}>
-              <Path d={arrivalPath(lane)} fill="none" stroke="#45525c" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
-              <Path d={departurePath(lane)} fill="none" stroke="#45525c" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
-            </React.Fragment>
+          {Object.entries(SEGMENTS).map(([id, d]) => (
+            <Path key={id} d={d} fill="none" stroke="#45525c" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
           ))}
 
           {ROUTES.map((lane) => platforms[lane] ? (
-            <Line key={`occ-${lane}`} x1="232" y1={TRACK_Y[lane]} x2="315" y2={TRACK_Y[lane]} stroke="#ff4d6d" strokeWidth="9" strokeLinecap="round" />
+            <Path
+              key={`occ-${lane}`}
+              d={lane === 1 ? 'M 268 55 H 335' : lane === 2 ? 'M 268 140 H 335' : 'M 268 225 H 335'}
+              fill="none"
+              stroke="#ff4d6d"
+              strokeWidth="9"
+              strokeLinecap="round"
+            />
           ) : null)}
 
-          {arrivalTrain && arrivalLane ? <Path d={arrivalPath(arrivalLane)} fill="none" stroke="#ffd65a" strokeWidth="7" strokeLinecap="round" strokeLinejoin="round" /> : null}
-          {departureTrain && departureLane ? <Path d={departurePath(departureLane)} fill="none" stroke="#ffd65a" strokeWidth="7" strokeLinecap="round" strokeLinejoin="round" /> : null}
+          <RouteHighlight route={arrivalTrain ? arrivalRoute : null} color="#ffd65a" />
+          <RouteHighlight route={departureTrain ? departureRoute : null} color="#66d8ff" />
 
-          <Circle cx="105" cy={WEST_IN_Y} r="7" fill="#0b151d" stroke={arrivalTrain ? '#ffd65a' : '#93a0aa'} strokeWidth="3" />
-          <SvgText x="90" y="84" fill="#83919d" fontSize="9" fontWeight="700">W1</SvgText>
-          <Circle cx="110" cy={WEST_OUT_Y} r="7" fill="#0b151d" stroke={departureTrain ? '#ffd65a' : '#93a0aa'} strokeWidth="3" />
-          <SvgText x="94" y="183" fill="#83919d" fontSize="9" fontWeight="700">W2</SvgText>
+          <Circle cx="85" cy="95" r="6" fill="#0b151d" stroke="#9aa7b0" strokeWidth="2.5" />
+          <Circle cx="85" cy="185" r="6" fill="#0b151d" stroke="#9aa7b0" strokeWidth="2.5" />
+          <Circle cx="235" cy="110" r="6" fill="#0b151d" stroke="#9aa7b0" strokeWidth="2.5" />
+          <Circle cx="235" cy="170" r="6" fill="#0b151d" stroke="#9aa7b0" strokeWidth="2.5" />
+          <Circle cx="260" cy="140" r="5" fill="#0b151d" stroke="#9aa7b0" strokeWidth="2" />
 
-          <Signal x={62} y={73} green={Boolean(arrivalTrain)} label="S1" />
-          <Signal x={62} y={187} green={Boolean(departureTrain)} label="S2" />
-          {ROUTES.map((lane) => <Signal key={lane} x={238} y={TRACK_Y[lane] - 23} green={Boolean(departureTrain) && departureLane === lane} label={`D${lane}`} />)}
+          <SvgText x="70" y="80" fill="#82919b" fontSize="9" fontWeight="800">W1</SvgText>
+          <SvgText x="69" y="208" fill="#82919b" fontSize="9" fontWeight="800">W2</SvgText>
+          <SvgText x="238" y="100" fill="#82919b" fontSize="8" fontWeight="800">W3</SvgText>
+          <SvgText x="238" y="192" fill="#82919b" fontSize="8" fontWeight="800">W4</SvgText>
+          <SvgText x="262" y="157" fill="#82919b" fontSize="8" fontWeight="800">W5</SvgText>
+
+          <Rect x="132" y="103" width="46" height="74" rx="5" fill="none" stroke="#657783" strokeWidth="1" strokeDasharray="3 3" />
+          <SvgText x="139" y="99" fill="#9aa8b1" fontSize="8" fontWeight="900">EW1</SvgText>
+          <Circle cx="215" cy="140" r="7" fill="#0b151d" stroke="#657783" strokeWidth="1.5" />
+          <SvgText x="206" y="132" fill="#9aa8b1" fontSize="8" fontWeight="900">K1</SvgText>
+
+          <Signal x={52} y={70} green={Boolean(arrivalTrain)} label="S1" />
+          <Signal x={52} y={210} green={Boolean(departureTrain)} label="S2" />
+          {ROUTES.map((lane) => (
+            <Signal
+              key={`D${lane}`}
+              x={284}
+              y={TRACK_Y[lane] - 23}
+              green={Boolean(departureTrain) && departureLane === lane}
+              label={`D${lane}`}
+            />
+          ))}
 
           {ROUTES.map((lane) => (
-            <React.Fragment key={`label-${lane}`}>
-              <Rect x="326" y={TRACK_Y[lane] - 14} width="27" height="28" rx="5" fill="#101b23" stroke="#364650" />
-              <SvgText x="339.5" y={TRACK_Y[lane] + 5} fill="#e8eef2" fontSize="13" fontWeight="800" textAnchor="middle">{lane}</SvgText>
+            <React.Fragment key={`p-${lane}`}>
+              <Rect x="342" y={TRACK_Y[lane] - 14} width="28" height="28" rx="5" fill="#101b23" stroke="#364650" />
+              <SvgText x="356" y={TRACK_Y[lane] + 5} fill="#e8eef2" fontSize="13" fontWeight="800" textAnchor="middle">{lane}</SvgText>
             </React.Fragment>
           ))}
 
-          {queueHead ? <Circle cx="343" cy={TRACK_Y[queueHead.target] - 22} r="5" fill="#58b9ff" /> : null}
-          <SvgText x="14" y="90" fill="#6f808b" fontSize="8" fontWeight="800">WEST IN →</SvgText>
-          <SvgText x="14" y="177" fill="#6f808b" fontSize="8" fontWeight="800">← WEST UIT</SvgText>
+          {queueHead ? <Circle cx="369" cy={TRACK_Y[queueHead.target] - 22} r="4.5" fill="#58b9ff" /> : null}
+          <SvgText x="13" y="84" fill="#6f808b" fontSize="8" fontWeight="800">WEST IN →</SvgText>
+          <SvgText x="13" y="204" fill="#6f808b" fontSize="8" fontWeight="800">← WEST UIT</SvgText>
         </Svg>
 
         {boardSize.width > 0 && ROUTES.map((lane) => {
@@ -156,20 +246,26 @@ function DispatcherTableau({
               key={train.id}
               id={train.id}
               detail={train.status === 'ready' ? 'GEREED' : train.status === 'departing' ? 'UIT' : `${train.remaining}s`}
-              style={{ position: 'absolute', left: 250 * scaleX - 29, top: TRACK_Y[lane] * scaleY - 14 }}
+              style={{ position: 'absolute', left: 286 * scaleX - 29, top: TRACK_Y[lane] * scaleY - 14 }}
             />
           );
         })}
 
         {boardSize.width > 0 && arrivalTrain ? (
-          <Animated.View pointerEvents="none" style={[styles.trainBlock, styles.movingTrain, { transform: [{ translateX: arrivalX }, { translateY: arrivalY }] }]}>
+          <Animated.View
+            pointerEvents="none"
+            style={[styles.trainBlock, styles.movingTrain, { transform: [{ translateX: arrivalPos.x }, { translateY: arrivalPos.y }] }]}
+          >
             <Text style={styles.trainBlockId}>{arrivalTrain.id}</Text>
             <Text style={styles.trainBlockDest}>→ P{arrivalLane}</Text>
           </Animated.View>
         ) : null}
 
         {boardSize.width > 0 && departureTrain ? (
-          <Animated.View pointerEvents="none" style={[styles.trainBlock, styles.movingTrain, { transform: [{ translateX: departureX }, { translateY: departureY }] }]}>
+          <Animated.View
+            pointerEvents="none"
+            style={[styles.trainBlock, styles.movingTrain, { transform: [{ translateX: departurePos.x }, { translateY: departurePos.y }] }]}
+          >
             <Text style={styles.trainBlockId}>{departureTrain.id}</Text>
             <Text style={styles.trainBlockDest}>← WEST</Text>
           </Animated.View>
@@ -177,10 +273,10 @@ function DispatcherTableau({
       </View>
 
       <View style={styles.legendRow}>
-        <View style={styles.legendItem}><View style={[styles.legendDot, { backgroundColor: '#ff4d5f' }]} /><Text style={styles.legendText}>STOP</Text></View>
-        <View style={styles.legendItem}><View style={[styles.legendDot, { backgroundColor: '#38e27d' }]} /><Text style={styles.legendText}>VEILIG</Text></View>
-        <View style={styles.legendItem}><View style={[styles.legendLine, { backgroundColor: '#ffd65a' }]} /><Text style={styles.legendText}>RIJWEG</Text></View>
+        <View style={styles.legendItem}><View style={[styles.legendLine, { backgroundColor: '#ffd65a' }]} /><Text style={styles.legendText}>AANKOMST</Text></View>
+        <View style={styles.legendItem}><View style={[styles.legendLine, { backgroundColor: '#66d8ff' }]} /><Text style={styles.legendText}>VERTREK</Text></View>
         <View style={styles.legendItem}><View style={[styles.legendLine, { backgroundColor: '#ff4d6d' }]} /><Text style={styles.legendText}>BEZET</Text></View>
+        <View style={styles.legendItem}><Text style={styles.legendText}>EW1 ENGELS • K1 KRUISING</Text></View>
       </View>
     </View>
   );
@@ -214,6 +310,8 @@ export default function App() {
   const platformsRef = useRef({ 1: null, 2: null, 3: null });
   const arrivalBusyRef = useRef(false);
   const departureBusyRef = useRef(false);
+  const arrivalLaneRef = useRef(null);
+  const departureLaneRef = useRef(null);
 
   const replaceQueue = (updater) => {
     setQueue((current) => {
@@ -279,28 +377,44 @@ export default function App() {
     if (nextLives <= 0) setTimeout(() => setPhase('gameover'), 350);
   };
 
+  const arrivalConflictsWithDeparture = (lane) => {
+    if (!departureBusyRef.current || !departureLaneRef.current) return false;
+    return routesConflict(ARRIVAL_ROUTES[lane], DEPARTURE_ROUTES[departureLaneRef.current]);
+  };
+
+  const departureConflictsWithArrival = (lane) => {
+    if (!arrivalBusyRef.current || !arrivalLaneRef.current) return false;
+    return routesConflict(DEPARTURE_ROUTES[lane], ARRIVAL_ROUTES[arrivalLaneRef.current]);
+  };
+
   const chooseArrivalRoute = (lane) => {
     const waiting = queueRef.current[0];
     if (phase !== 'playing') return;
-    if (arrivalBusyRef.current) { setMessage('Aankomstrijweg is al bezet.'); return; }
+    if (arrivalBusyRef.current) { setMessage('WEST IN is al bezet door een aankomende trein.'); return; }
     if (!waiting) { setMessage('Geen trein wacht op WEST IN.'); return; }
     if (platformsRef.current[lane]) { setMessage(`P${lane} is bezet.`); return; }
+    if (arrivalConflictsWithDeparture(lane)) {
+      setMessage(`Rijwegconflict: WEST IN → P${lane} kruist de actieve uitrijweg bij EW1/K1.`);
+      return;
+    }
 
     arrivalBusyRef.current = true;
+    arrivalLaneRef.current = lane;
     replaceQueue((current) => current.slice(1));
     setArrivalTrain(waiting);
     setArrivalLane(lane);
     arrivalProgress.setValue(0);
-    setMessage(`${waiting.id}: rijweg WEST IN → P${lane} ingesteld.`);
+    setMessage(`${waiting.id}: ${ARRIVAL_ROUTES[lane].name} vastgelegd.`);
 
     const animation = Animated.timing(arrivalProgress, {
       toValue: 1,
-      duration: Math.max(1300, 2500 - Math.floor(scoreRef.current / 70) * 90),
+      duration: Math.max(1400, 2600 - Math.floor(scoreRef.current / 70) * 90),
       useNativeDriver: true,
     });
     arrivalAnimation.current = animation;
     animation.start(({ finished }) => {
       arrivalBusyRef.current = false;
+      arrivalLaneRef.current = null;
       if (!finished) return;
 
       replacePlatforms((current) => ({
@@ -333,8 +447,13 @@ export default function App() {
     const train = platformsRef.current[lane];
     if (!train) { setMessage(`P${lane} is al vrij.`); return; }
     if (train.status !== 'ready') { setMessage(`${train.id} op P${lane} is nog niet gereed.`); return; }
+    if (departureConflictsWithArrival(lane)) {
+      setMessage(`Rijwegconflict: P${lane} → WEST UIT kruist de actieve aankomstrijweg bij EW1/K1.`);
+      return;
+    }
 
     departureBusyRef.current = true;
+    departureLaneRef.current = lane;
     replacePlatforms((current) => ({
       ...current,
       [lane]: current[lane] ? { ...current[lane], status: 'departing' } : null,
@@ -342,17 +461,18 @@ export default function App() {
     setDepartureTrain(train);
     setDepartureLane(lane);
     departureProgress.setValue(0);
-    setMessage(`${train.id}: vertrek bevestigd — P${lane} → WEST UIT.`);
+    setMessage(`${train.id}: ${DEPARTURE_ROUTES[lane].name} vastgelegd.`);
 
     const animation = Animated.timing(departureProgress, {
       toValue: 1,
-      duration: 2000,
+      duration: 2200,
       useNativeDriver: true,
     });
     departureAnimation.current = animation;
     animation.start(({ finished }) => {
       if (!finished) {
         departureBusyRef.current = false;
+        departureLaneRef.current = null;
         return;
       }
 
@@ -360,9 +480,10 @@ export default function App() {
       setDepartureTrain(null);
       setDepartureLane(null);
       departureBusyRef.current = false;
+      departureLaneRef.current = null;
       scoreRef.current += 5;
       setScore(scoreRef.current);
-      setMessage(`${train.id} is via WEST UIT vertrokken. P${lane} vrij. +5`);
+      setMessage(`${train.id} via WEST UIT vertrokken. P${lane} vrij. +5`);
     });
   };
 
@@ -376,6 +497,8 @@ export default function App() {
     livesRef.current = 3;
     arrivalBusyRef.current = false;
     departureBusyRef.current = false;
+    arrivalLaneRef.current = null;
+    departureLaneRef.current = null;
 
     const firstQueue = [createTrain()];
     queueRef.current = firstQueue;
@@ -392,7 +515,7 @@ export default function App() {
     setLives(3);
     setCombo(0);
     setTotalDelay(0);
-    setMessage('Post geopend. Eerste trein meldt zich op WEST IN.');
+    setMessage('Interlocking vrij. Eerste trein meldt zich op WEST IN.');
     setPhase('playing');
   };
 
@@ -401,9 +524,9 @@ export default function App() {
       <SafeAreaView style={styles.screen}>
         <StatusBar barStyle="light-content" />
         <View style={styles.menuWrap}>
-          <Text style={styles.kicker}>MULTI-TRAIN DISPATCHER / V0.4.1</Text>
+          <Text style={styles.kicker}>INTERLOCKING DISPATCHER / V0.5</Text>
           <Text style={styles.title}>RAIL{`\n`}RUSH HOUR</Text>
-          <Text style={styles.subtitle}>Regel meerdere treinen tegelijk. WEST IN voor aankomsten, WEST UIT voor gekeerde treinen.</Text>
+          <Text style={styles.subtitle}>Bedien een echte wisselstraat met gewone wissels, een Engels wissel en kruisende rijwegen. Niet-conflicterende rijwegen mogen tegelijk.</Text>
           <Pressable style={styles.primaryButton} onPress={startGame}><Text style={styles.primaryButtonText}>START DIENST</Text></Pressable>
         </View>
       </SafeAreaView>
@@ -490,11 +613,18 @@ export default function App() {
           <View style={styles.routeRow}>
             {ROUTES.map((lane) => {
               const occupied = Boolean(platforms[lane]);
+              const conflict = Boolean(departureTrain) && routesConflict(ARRIVAL_ROUTES[lane], DEPARTURE_ROUTES[departureLane]);
               const disabled = !queueHead || Boolean(arrivalTrain) || occupied;
               const target = queueHead?.target === lane;
               return (
-                <Pressable key={lane} disabled={disabled} style={[styles.routeButton, target && styles.routeButtonTarget, disabled && styles.routeButtonDisabled]} onPress={() => chooseArrivalRoute(lane)}>
-                  <Text style={styles.routeButtonSmall}>{occupied ? 'BEZET' : target ? 'GEPLAND' : 'ROUTE'}</Text><Text style={styles.routeButtonBig}>P{lane}</Text>
+                <Pressable
+                  key={lane}
+                  disabled={disabled}
+                  style={[styles.routeButton, target && styles.routeButtonTarget, conflict && styles.routeButtonConflict, disabled && styles.routeButtonDisabled]}
+                  onPress={() => chooseArrivalRoute(lane)}
+                >
+                  <Text style={styles.routeButtonSmall}>{occupied ? 'BEZET' : conflict ? 'CONFLICT' : target ? 'GEPLAND' : 'RIJWEG'}</Text>
+                  <Text style={styles.routeButtonBig}>P{lane}</Text>
                 </Pressable>
               );
             })}
@@ -507,23 +637,26 @@ export default function App() {
             <View style={styles.noDeparture}><Text style={styles.noDepartureText}>{departureTrain ? `${departureTrain.id} rijdt uit` : 'Geen trein gereed voor vertrek'}</Text></View>
           ) : (
             <View style={styles.departureRow}>
-              {readyLanes.map((lane) => (
-                <Pressable
-                  key={lane}
-                  hitSlop={10}
-                  style={[styles.departureButton, departureTrain && styles.routeButtonDisabled]}
-                  onPress={() => dispatchDeparture(lane)}
-                >
-                  <Text style={styles.departureSmall}>{platforms[lane]?.id}</Text>
-                  <Text style={styles.departureBig}>P{lane} → WEST UIT</Text>
-                </Pressable>
-              ))}
+              {readyLanes.map((lane) => {
+                const conflict = Boolean(arrivalTrain) && routesConflict(DEPARTURE_ROUTES[lane], ARRIVAL_ROUTES[arrivalLane]);
+                return (
+                  <Pressable
+                    key={lane}
+                    hitSlop={10}
+                    style={[styles.departureButton, conflict && styles.departureButtonConflict, departureTrain && styles.routeButtonDisabled]}
+                    onPress={() => dispatchDeparture(lane)}
+                  >
+                    <Text style={styles.departureSmall}>{conflict ? 'RIJWEGCONFLICT' : platforms[lane]?.id}</Text>
+                    <Text style={styles.departureBig}>P{lane} → WEST UIT</Text>
+                  </Pressable>
+                );
+              })}
             </View>
           )}
         </View>
       </ScrollView>
 
-      <View style={styles.footer}><Text style={styles.footerText}>COINS {coins} • W1/S1 WEST IN • W2/S2 WEST UIT • D1–D3</Text></View>
+      <View style={styles.footer}><Text style={styles.footerText}>W1–W5 • EW1 ENGELS WISSEL • K1 KRUISING • NIET-CONFLICTERENDE RIJWEGEN PARALLEL</Text></View>
     </SafeAreaView>
   );
 }
@@ -554,17 +687,17 @@ const styles = StyleSheet.create({
 
   tableauFrame: { marginTop: 9, backgroundColor: '#0a1218', borderWidth: 1, borderColor: '#263741', borderRadius: 11, overflow: 'hidden' },
   tableauHeader: { minHeight: 39, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 10, borderBottomWidth: 1, borderBottomColor: '#263741' },
-  tableauTitle: { color: '#9eb0bb', fontSize: 7.8, fontWeight: '900', letterSpacing: 0.8 },
+  tableauTitle: { color: '#9eb0bb', fontSize: 7.5, fontWeight: '900', letterSpacing: 0.6 },
   tableauStatus: { color: '#ffd65a', fontSize: 7.2, fontWeight: '900' },
-  svgArea: { height: 245, position: 'relative', overflow: 'hidden' },
+  svgArea: { height: 260, position: 'relative', overflow: 'hidden' },
   trainBlock: { width: 58, minHeight: 28, borderRadius: 4, backgroundColor: '#d9edf8', borderWidth: 2, borderColor: '#081016', paddingHorizontal: 3, paddingVertical: 2, alignItems: 'center', justifyContent: 'center' },
   movingTrain: { position: 'absolute', left: 0, top: 0 },
   trainBlockId: { color: '#0a141b', fontSize: 8, fontWeight: '900' },
   trainBlockDest: { color: '#31566c', fontSize: 7, fontWeight: '900', marginTop: 1 },
-  legendRow: { minHeight: 31, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 12, borderTopWidth: 1, borderTopColor: '#1d2a33' },
+  legendRow: { minHeight: 34, flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', alignItems: 'center', gap: 10, paddingVertical: 4, borderTopWidth: 1, borderTopColor: '#1d2a33' },
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  legendDot: { width: 7, height: 7, borderRadius: 4 }, legendLine: { width: 14, height: 3, borderRadius: 2 },
-  legendText: { color: '#657783', fontSize: 6.5, fontWeight: '900' },
+  legendLine: { width: 14, height: 3, borderRadius: 2 },
+  legendText: { color: '#657783', fontSize: 6.2, fontWeight: '900' },
 
   infoGrid: { flexDirection: 'row', gap: 8, marginTop: 8 },
   queuePanel: { flex: 1.18, minHeight: 83, backgroundColor: '#0d161d', borderWidth: 1, borderColor: '#263640', borderRadius: 8, padding: 8 },
@@ -587,14 +720,17 @@ const styles = StyleSheet.create({
   controlsBlock: { marginTop: 9 }, controlsLabel: { color: '#60727e', fontSize: 7, fontWeight: '900', letterSpacing: 1, marginBottom: 6, textAlign: 'center' },
   routeRow: { flexDirection: 'row', width: '100%', gap: 6 },
   routeButton: { flex: 1, minHeight: 55, alignItems: 'center', justifyContent: 'center', backgroundColor: '#111c23', borderWidth: 1, borderColor: '#40505a', borderRadius: 7 },
-  routeButtonTarget: { borderColor: '#58b9ff', backgroundColor: '#10202a' }, routeButtonDisabled: { opacity: 0.34 },
+  routeButtonTarget: { borderColor: '#58b9ff', backgroundColor: '#10202a' },
+  routeButtonConflict: { borderColor: '#ff5968', backgroundColor: '#24161a' },
+  routeButtonDisabled: { opacity: 0.34 },
   routeButtonSmall: { color: '#748691', fontSize: 6.5, fontWeight: '900', letterSpacing: 1 }, routeButtonBig: { color: '#e7eff3', fontSize: 19, fontWeight: '900', marginTop: 2 },
 
   departureArea: { marginTop: 12, paddingBottom: 10 }, departureRow: { flexDirection: 'row', gap: 6 },
-  departureButton: { flex: 1, minHeight: 56, alignItems: 'center', justifyContent: 'center', backgroundColor: '#2a2410', borderWidth: 2, borderColor: '#ffd65a', borderRadius: 8 },
-  departureSmall: { color: '#ad973a', fontSize: 7, fontWeight: '900' }, departureBig: { color: '#ffe278', fontSize: 12, fontWeight: '900', marginTop: 2 },
+  departureButton: { flex: 1, minHeight: 56, alignItems: 'center', justifyContent: 'center', backgroundColor: '#10212a', borderWidth: 2, borderColor: '#66d8ff', borderRadius: 8 },
+  departureButtonConflict: { backgroundColor: '#24161a', borderColor: '#ff5968' },
+  departureSmall: { color: '#80b6ca', fontSize: 7, fontWeight: '900' }, departureBig: { color: '#9be7ff', fontSize: 12, fontWeight: '900', marginTop: 2 },
   noDeparture: { minHeight: 42, alignItems: 'center', justifyContent: 'center', backgroundColor: '#0a1218', borderWidth: 1, borderColor: '#1e2d36', borderRadius: 7 },
   noDepartureText: { color: '#52636e', fontSize: 8, fontWeight: '800' },
 
-  footer: { alignItems: 'center', paddingVertical: 7, borderTopWidth: 1, borderTopColor: '#14212a' }, footerText: { color: '#42535e', fontSize: 7, fontWeight: '900' },
+  footer: { alignItems: 'center', paddingVertical: 7, paddingHorizontal: 8, borderTopWidth: 1, borderTopColor: '#14212a' }, footerText: { color: '#42535e', fontSize: 6.5, fontWeight: '900', textAlign: 'center' },
 });
