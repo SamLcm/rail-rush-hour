@@ -5,6 +5,12 @@
     "version": "0.1.0",
     "orientation": "portrait",
     "userInterfaceStyle": "dark",
-    "platforms": ["ios", "android", "web"]
+    "platforms": ["ios", "android", "web"],
+    "web": {
+      "output": "single"
+    },
+    "experiments": {
+      "baseUrl": "/rail-rush-hour"
+    }
   }
 }
