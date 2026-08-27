@@ -1,3 +1,3 @@
-import AppV17 from './AppV17';
+import AppV18 from './AppV18';
 
-export default AppV17;
+export default AppV18;
