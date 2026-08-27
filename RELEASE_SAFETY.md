@@ -57,6 +57,23 @@ Dit document is verplicht onderdeel van de developerfase. Alles met 🟡 of 🔴
 | Huidige missievolgorde en beloningen | 🟡 | Testpacing; opnieuw balanceren en eigen missies ontwerpen. |
 | Emoji/iconen in navigatie en upgradebubbels | 🔴 | Vervangen door eigen iconenset. |
 
+## v0.24 Deeper Gameplay Pass
+
+| Onderdeel | Status | Actie vóór release |
+|---|---|---|
+| AppV24.js broncode en simulatie | 🟢 | Eigen implementatie; technische basis kan blijven. |
+| Handmatige keuze Vertrek nu / Wacht 5 sec | 🟢 | Rail Rush Hour-specifieke operationele kern; verder uitbouwen. |
+| Vertraging, achterblijvers en tevredenheid | 🟢 | Eigen operationele gevolgen; balans later verfijnen. |
+| Route-specifieke vraag op het perron | 🟢 | Sterke eigen gameplayrichting; later koppelen aan echte bestemmingen en overstappen. |
+| Rush Hour +85% reizigersinstroom | 🟡 | Testevent; timing en multiplier vóór release opnieuw balanceren. |
+| Treinlengte 1/2/3 sets en exploitatiekosten | 🟢 | Eigen capaciteitskeuze; later koppelen aan beperkt materieel en koppelen/afkoppelen. |
+| Automatische bottleneckmeting | 🟢 | Generieke simulatiemechaniek. |
+| Station Levels 1–10 en huidige unlocks | 🟡 | Nog steeds developer/reference-progression. |
+| Greenfield/Lakeside/Airport/Harbor/Capital | 🔴 | Tijdelijke route- en wereldnamen vervangen. |
+| Developer level selector | 🔴 | Verwijderen uit releasebuild. |
+| Alle huidige parkeer-, gebouw-, perron- en treinvisuals | 🔴 | Definitieve eigen Rail Rush Hour art direction/assets maken. |
+| Emoji/iconen | 🔴 | Vervangen door eigen iconenset. |
+
 ## Verboden bronmateriaal
 
 Niet importeren of bundelen in de repository zonder expliciete gebruiksrechten:
