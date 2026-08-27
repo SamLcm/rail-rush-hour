@@ -42,6 +42,21 @@ Dit document is verplicht onderdeel van de developerfase. Alles met 🟡 of 🔴
 | Emoji/iconen in navigatie | 🔴 | Vervangen door eigen iconenset. |
 | Namen Central Valley / Greenfield / Lakeside / Airport | 🔴 | Tijdelijke developer-namen; vóór release eigen wereld/naamgeving kiezen. |
 
+## v0.23 Full Progression Reference Build
+
+| Onderdeel | Status | Actie vóór release |
+|---|---|---|
+| AppV23.js broncode | 🟢 | Volledig eigen React Native-implementatie. |
+| Parking → Entrance → Tickets → Security → Waiting → Platform → Train | 🟡 | Bewust als reference-progression gebruikt; later koppelen aan eigen Rail Rush Hour-stationsflow. |
+| Station Levels 1–10 en unlockvolgorde | 🟡 | Developer-progressie; definitieve volgorde, namen, balans en pacing vóór release opnieuw ontwerpen. |
+| Café, Shop, Toilets, Restaurant, VIP Lounge, Manager | 🟡 | Generieke stationfaciliteiten; definitieve uitvoering en unlocklogica eigen maken. |
+| Platform 2 op Lv 4 en Platform 3 op Lv 8 | 🟡 | Tijdelijke progression voor gameplaytest. |
+| Route-unlocks Greenfield/Lakeside/Airport/Harbor/Capital | 🔴 | Tijdelijke developer-routes en namen volledig vervangen. |
+| Developer level selector | 🔴 | Alleen voor testen; verwijderen uit releasebuild. |
+| Huidige parkeerterrein-, station-, perron- en treinvisuals | 🔴 | Volledig vervangen door definitieve Rail Rush Hour-art direction/assets. |
+| Huidige missievolgorde en beloningen | 🟡 | Testpacing; opnieuw balanceren en eigen missies ontwerpen. |
+| Emoji/iconen in navigatie en upgradebubbels | 🔴 | Vervangen door eigen iconenset. |
+
 ## Verboden bronmateriaal
 
 Niet importeren of bundelen in de repository zonder expliciete gebruiksrechten:
