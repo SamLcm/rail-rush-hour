@@ -26,6 +26,22 @@ Dit document is verplicht onderdeel van de developerfase. Alles met 🟡 of 🔴
 | Namen Noorddam / Havenstad / Oostpoort / Luchthaven | 🟢 | Eigen fictieve bestemmingen. |
 | Rail Rush Hour-naam en operationele vertrekbeslissing | 🟢 | Kernidentiteit behouden en verder uitbouwen. |
 
+## v0.22 Level One Reference Build
+
+| Onderdeel | Status | Actie vóór release |
+|---|---|---|
+| AppV22.js broncode en simulatie | 🟢 | Volledig eigen implementatie. |
+| Start met klein station + één trein + één spoor | 🟡 | Generiek tycoonconcept; later eigen Rail Rush Hour-progression vastleggen. |
+| Ticket Office → Security → Waiting Hall → Platform → Train flow | 🟡 | Bewust dicht op reference-gameplay; voor release aanpassen naar eigen stationslogica. |
+| Missievolgorde en claim-beloningen | 🟡 | Eigen progression, teksten en balans ontwerpen. |
+| Zijmenu Missions / Routes / Schedule / Trains / Tech | 🟡 | Functies mogen blijven, definitieve UI en informatiearchitectuur opnieuw ontwerpen. |
+| Automatische treincyclus en route-unlocks | 🟡 | Gameplay opnieuw balanceren en koppelen aan Rail Rush Hour-dienstregeling. |
+| Ticketmachines, metaaldetectors, wachtruimte, café en perron als level-1 opbouw | 🟡 | Generieke faciliteiten; uiteindelijke plaatsing, volgorde en uiterlijk eigen maken. |
+| Alle tijdelijke level-1 graphics/geometrie | 🔴 | Volledig vervangen door definitieve Rail Rush Hour art direction/assets. |
+| Huidige treinplaceholder | 🔴 | Vervangen door eigen consistente treinsprites/modellen. |
+| Emoji/iconen in navigatie | 🔴 | Vervangen door eigen iconenset. |
+| Namen Central Valley / Greenfield / Lakeside / Airport | 🔴 | Tijdelijke developer-namen; vóór release eigen wereld/naamgeving kiezen. |
+
 ## Verboden bronmateriaal
 
 Niet importeren of bundelen in de repository zonder expliciete gebruiksrechten:
