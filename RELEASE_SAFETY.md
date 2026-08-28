@@ -108,6 +108,23 @@ Dit document is verplicht onderdeel van de developerfase. Alles met 🟡 of 🔴
 | Developer level selector in Levels-panel | 🔴 | Alleen testfunctie; verwijderen uit releasebuild. |
 | Handmatige vertrekkeuze, instapprioriteit, routevraag en multi-train operatie | 🟢 | Eigen kernmechanieken; behouden en verdiepen. |
 
+## v0.27 Visual Polish Pass
+
+| Onderdeel | Status | Actie vóór release |
+|---|---|---|
+| AppV27.js broncode, animaties en simulatie | 🟢 | Eigen implementatie; technische basis kan blijven. |
+| Gedetailleerdere treinen met zichtbare 1/2/3-setlengte | 🟢 | Eigen tijdelijke vector/View-opbouw; later eventueel vervangen door productie-assets. |
+| Perronoverkappingen, lampen, banken, routeborden en ballast | 🟢 | Eigen visuele uitwerking; definitieve art direction later consistent maken. |
+| Stationsgevel, glasdeuren, vertrekbord, voorplein en groen | 🟢 | Eigen tijdelijke uitwerking; mag als basis dienen voor definitieve stijl. |
+| Pulse/highlight op vertrekklare treinen en ernstige bottlenecks | 🟢 | Eigen feedbackmechaniek; behouden indien bruikbaar. |
+| Upgrade/vertrek/level-up feedback overlays | 🟢 | Eigen UI-feedback; polish later verfijnen. |
+| Top HUD + bottleneck alert + Fix Now | 🟡 | Managementconventie; vormgeving vóór release voldoende onderscheidend houden. |
+| Horizontale servicecards en bottom upgrade cards | 🟡 | Bekende tycoonconventies; uiteindelijke visuele identiteit verder eigen maken. |
+| Northbridge / Seabright / Emberfall / Harbor Point / Grand City | 🔴 | Tijdelijke developer-routes vervangen. |
+| NORTHVALE STATION | 🔴 | Tijdelijke developernaam vervangen. |
+| Emoji en tekstsymbolen in enkele UI-elementen | 🔴 | Vervangen door definitieve eigen iconenset. |
+| Developer level selector | 🔴 | Alleen voor testbuilds; verwijderen vóór release. |
+
 ## Verboden bronmateriaal
 
 Niet importeren of bundelen in de repository zonder expliciete gebruiksrechten:
