@@ -74,6 +74,23 @@ Dit document is verplicht onderdeel van de developerfase. Alles met 🟡 of 🔴
 | Alle huidige parkeer-, gebouw-, perron- en treinvisuals | 🔴 | Definitieve eigen Rail Rush Hour art direction/assets maken. |
 | Emoji/iconen | 🔴 | Vervangen door eigen iconenset. |
 
+## v0.25 Multi-Train Operations
+
+| Onderdeel | Status | Actie vóór release |
+|---|---|---|
+| AppV25.js broncode en multi-train simulatie | 🟢 | Eigen implementatie; technische basis kan blijven. |
+| Meerdere gelijktijdige treinen op P1/P2/P3 | 🟢 | Belangrijk onderdeel van de eigen Rail Rush Hour-operationele laag. |
+| Afzonderlijke vertrektijd, vertraging, bezetting en vertrekkeuze per trein | 🟢 | Behouden en later verdiepen met echte dienstregeling. |
+| Route-specifieke reizigers die alleen de juiste trein nemen | 🟢 | Kernmechaniek; later uitbreiden met overstappers en aansluitingen. |
+| Instapprioriteit per perron | 🟢 | Eigen operationele keuze; balans en presentatie later verfijnen. |
+| Treinlengte per afzonderlijke trein | 🟢 | Later koppelen aan beperkte materieelvoorraad en koppelen/afkoppelen. |
+| Platform 2 vanaf Lv 4 / Platform 3 vanaf Lv 8 | 🟡 | Testprogressie; definitieve unlockvoorwaarden nog ontwerpen. |
+| Rush Hour en huidige economie | 🟡 | Testbalans; vóór release opnieuw balanceren. |
+| Greenfield/Lakeside/Airport/Harbor/Capital | 🔴 | Tijdelijke developer-routes vervangen door definitieve Rail Rush Hour-wereld. |
+| Developer level selector | 🔴 | Alleen voor testbuilds; verwijderen voor release. |
+| Huidige station-, trein-, perron- en parkeergraphics | 🔴 | Vervangen door definitieve eigen art direction/assets. |
+| Emoji/iconen | 🔴 | Vervangen door eigen iconenset. |
+
 ## Verboden bronmateriaal
 
 Niet importeren of bundelen in de repository zonder expliciete gebruiksrechten:
