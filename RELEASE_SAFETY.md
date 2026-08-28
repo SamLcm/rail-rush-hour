@@ -91,6 +91,23 @@ Dit document is verplicht onderdeel van de developerfase. Alles met 🟡 of 🔴
 | Huidige station-, trein-, perron- en parkeergraphics | 🔴 | Vervangen door definitieve eigen art direction/assets. |
 | Emoji/iconen | 🔴 | Vervangen door eigen iconenset. |
 
+## v0.26 Polished Playable Visual Shell
+
+| Onderdeel | Status | Actie vóór release |
+|---|---|---|
+| AppV26.js broncode en simulatie | 🟢 | Eigen implementatie; technische gameplaybasis kan blijven. |
+| Eén vaste telefooncompositie zonder grote pannable wereld | 🟢 | Eigen usability-keuze; testen op verschillende schermformaten. |
+| Top HUD + bottleneck alert + Fix Now | 🟡 | Reference-achtige managementpresentatie; definitieve vormgeving voldoende eigen maken. |
+| Horizontale actieve-treinenbalk | 🟢 | Sterke Rail Rush Hour-bediening; behouden en verder koppelen aan dienstregeling. |
+| Bottom upgrade cards | 🟡 | Idle-tycoonconventie; definitieve visuele stijl, iconen en effecten eigen maken. |
+| Stationsscene met Parking → Tickets → Security → Waiting → Platforms | 🟡 | Tijdelijke reference-layout; architectuur en art direction vóór release definitief eigen maken. |
+| Northbridge / Seabright / Emberfall / Harbor Point / Grand City | 🔴 | Tijdelijke developer-routes vervangen door definitieve wereldnaamgeving. |
+| NORTHVALE STATION | 🔴 | Tijdelijke developernaam vervangen. |
+| Huidige CSS/View-gebaseerde trein-, station- en passagiersgraphics | 🔴 | Vervangen/doorontwikkelen naar definitieve eigen productie-assets of eigen definitieve vectorstijl. |
+| Emoji en tekstsymbolen als iconen | 🔴 | Vervangen door definitieve eigen iconenset. |
+| Developer level selector in Levels-panel | 🔴 | Alleen testfunctie; verwijderen uit releasebuild. |
+| Handmatige vertrekkeuze, instapprioriteit, routevraag en multi-train operatie | 🟢 | Eigen kernmechanieken; behouden en verdiepen. |
+
 ## Verboden bronmateriaal
 
 Niet importeren of bundelen in de repository zonder expliciete gebruiksrechten:
